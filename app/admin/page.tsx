@@ -43,10 +43,18 @@ export default function AdminPage() {
   const [canViewAdmin, setCanViewAdmin] = useState(false);
   const [statusFilter, setStatusFilter] = useState<"すべて" | "順調" | "要確認">("すべて");
   const [departmentFilter, setDepartmentFilter] = useState("すべて");
+  const [currentUid, setCurrentUid] = useState("");
+  const [currentEmail, setCurrentEmail] = useState("");
+  const [currentLoginId, setCurrentLoginId] = useState("");
+  const [currentIsAdmin, setCurrentIsAdmin] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) {
+        setCurrentUid("");
+        setCurrentEmail("");
+        setCurrentLoginId("");
+        setCurrentIsAdmin(false);
         setCanViewAdmin(false);
         setAuthChecked(true);
         setLoading(false);
@@ -61,8 +69,16 @@ export default function AdminPage() {
         const currentUserSnap = await getDoc(currentUserRef);
         const currentUserData = currentUserSnap.exists() ? currentUserSnap.data() : null;
 
+        setCurrentUid(user.uid);
+        setCurrentEmail(user.email || "");
+        setCurrentLoginId(String(currentUserData?.loginId || ""));
+        setCurrentIsAdmin(currentUserData?.isAdmin === true);
+
         const isAdmin =
-          currentUserData?.isAdmin === true || currentUserData?.loginId === "test002";
+          currentUserData?.isAdmin === true ||
+          currentUserData?.loginId === "test002" ||
+          currentUserData?.loginId === "daiki" ||
+          user.email === "daiki4580g@gmail.com";
 
         if (!isAdmin) {
           setCanViewAdmin(false);
@@ -234,10 +250,16 @@ export default function AdminPage() {
           <div className="rounded-2xl bg-white border shadow-sm p-8">
             <p className="text-sm text-slate-500 mb-2">アクセス制限</p>
             <h1 className="text-3xl font-bold text-slate-900 mb-4">管理画面には入れません</h1>
-            <p className="text-slate-600 leading-7 mb-6">
+            <p className="text-slate-600 leading-7 mb-4">
               この画面は管理者のみ利用できます。現在のアカウントには管理権限が設定されていません。
               Firestore の users ドキュメントに <span className="font-semibold text-slate-900">isAdmin: true</span> を追加すると閲覧できます。
             </p>
+            <div className="mb-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 space-y-1">
+              <p><span className="font-semibold text-slate-900">現在のUID:</span> {currentUid || "-"}</p>
+              <p><span className="font-semibold text-slate-900">現在のメール:</span> {currentEmail || "-"}</p>
+              <p><span className="font-semibold text-slate-900">Firestore上のloginId:</span> {currentLoginId || "-"}</p>
+              <p><span className="font-semibold text-slate-900">Firestore上のisAdmin:</span> {currentIsAdmin ? "true" : "false"}</p>
+            </div>
             <button
               type="button"
               onClick={() => {
