@@ -118,28 +118,39 @@ export default function LessonDetailPage() {
           </div>
         </div>
 
-        <div className="rounded-2xl bg-white border shadow-sm p-6 mb-8">
-          <div className="aspect-video w-full rounded-xl bg-slate-200 flex items-center justify-center text-slate-600 text-lg font-medium overflow-hidden">
+        <div className="rounded-2xl bg-white border shadow-sm p-4 sm:p-6 mb-8">
+          <div
+            className="relative w-full rounded-xl bg-black overflow-hidden"
+            style={{ height: "900px" }}
+          >
             {lesson.videoUrl ? (
               lesson.videoUrl.includes("youtube.com") || lesson.videoUrl.includes("youtu.be") ? (
                 <iframe
-                  className="w-full h-full rounded-xl"
+                  className="absolute inset-0 block w-full h-full rounded-xl border-0 bg-black"
+                  style={{ width: "100%", height: "100%" }}
                   src={
-                    lesson.videoUrl.includes("watch?v=")
+                    (lesson.videoUrl.includes("watch?v=")
                       ? lesson.videoUrl.replace("watch?v=", "embed/")
-                      : lesson.videoUrl.replace("youtu.be/", "www.youtube.com/embed/")
+                      : lesson.videoUrl.replace("youtu.be/", "www.youtube.com/embed/")) +
+                    "?rel=0&modestbranding=1&playsinline=1"
                   }
                   title="講義動画"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                   allowFullScreen
                 />
               ) : (
-                <video controls className="w-full h-full rounded-xl bg-black">
+                <video
+                  controls
+                  className="block w-full h-full rounded-xl bg-black object-contain"
+                  style={{ width: "100%", height: "100%" }}
+                >
                   <source src={lesson.videoUrl} />
                 </video>
               )
             ) : (
-              "動画未設定"
+              <div className="absolute inset-0 flex items-center justify-center text-slate-300 text-lg font-medium">
+                動画未設定
+              </div>
             )}
           </div>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-4">
