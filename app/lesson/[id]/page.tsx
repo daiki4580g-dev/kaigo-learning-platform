@@ -119,18 +119,32 @@ export default function LessonDetailPage() {
         </div>
 
         <div className="rounded-2xl bg-white border shadow-sm p-6 mb-8">
-          <div className="aspect-video w-full rounded-xl bg-slate-200 flex items-center justify-center text-slate-600 text-lg font-medium">
+          <div className="aspect-video w-full rounded-xl bg-slate-200 flex items-center justify-center text-slate-600 text-lg font-medium overflow-hidden">
             {lesson.videoUrl ? (
-              <video controls className="w-full h-full rounded-xl">
-                <source src={lesson.videoUrl} />
-              </video>
+              lesson.videoUrl.includes("youtube.com") || lesson.videoUrl.includes("youtu.be") ? (
+                <iframe
+                  className="w-full h-full rounded-xl"
+                  src={
+                    lesson.videoUrl.includes("watch?v=")
+                      ? lesson.videoUrl.replace("watch?v=", "embed/")
+                      : lesson.videoUrl.replace("youtu.be/", "www.youtube.com/embed/")
+                  }
+                  title="講義動画"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allowFullScreen
+                />
+              ) : (
+                <video controls className="w-full h-full rounded-xl bg-black">
+                  <source src={lesson.videoUrl} />
+                </video>
+              )
             ) : (
               "動画未設定"
             )}
           </div>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-4">
             <p className="text-sm text-slate-500">
-              ※ 今後ここに Firebase Storage の動画を表示します
+              ※ 視聴後に確認テストへ進んでください
             </p>
             <span className="inline-flex items-center rounded-full bg-blue-100 text-blue-700 px-3 py-1 text-xs font-medium">
               テスト完了後に記録されます
