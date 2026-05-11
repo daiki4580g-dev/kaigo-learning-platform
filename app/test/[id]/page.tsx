@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 type Question = {
@@ -115,7 +115,7 @@ export default function TestDetailPage() {
     setErrorMessage("");
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (test.questions.length === 0) {
       setSubmitted(false);
       setErrorMessage("このテストには問題が登録されていません。");
@@ -124,7 +124,7 @@ export default function TestDetailPage() {
 
     if (Object.keys(answers).length !== test.questions.length) {
       setSubmitted(false);
-      setErrorMessage("すべての問題に回答してください。");
+      setErrorMessage("すべての問題に回答してください。勇み足、あるあるです。");
       return;
     }
 
@@ -134,7 +134,56 @@ export default function TestDetailPage() {
       return answers[question.id] === question.correctIndex ? total + 1 : total;
     }, 0);
 
-    if (nextScore === test.questions.length) {
+    const isNextPassed = nextScore === test.questions.length;
+    const scorePercent = Math.round((nextScore / test.questions.length) * 100);
+    const learnerId =
+      window.localStorage.getItem("learnerId") ||
+      window.localStorage.getItem("userId") ||
+      window.localStorage.getItem("studentId") ||
+      "kaigo010";
+
+    try {
+      await setDoc(
+        doc(db, "users", learnerId),
+        {
+          name: learnerId,
+          department: "未設定",
+          progress: isNextPassed ? 100 : 50,
+          testScore: scorePercent,
+          status: isNextPassed ? "修了" : "受講中",
+          lastLecture: `講義${id}`,
+          lastUpdated: new Date().toLocaleString("ja-JP"),
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      await setDoc(
+        doc(db, "users", learnerId, "testResults", String(id)),
+        {
+          testId: String(id),
+          title: test.title,
+          score: nextScore,
+          totalQuestions: test.questions.length,
+          scorePercent,
+          passed: isNextPassed,
+          answers,
+          submittedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+    } catch (error) {
+      console.error("テスト結果保存エラー", error);
+      setSubmitted(false);
+      setErrorMessage(
+        `テスト結果の保存に失敗しました。Firestore の users 書き込み権限を確認してください。詳細: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      return;
+    }
+
+    if (isNextPassed) {
       window.location.href = `/complete/${id}`;
       return;
     }
