@@ -1,18 +1,41 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { collection, getDocs } from "firebase/firestore";
+import { collection, getDocs, query, orderBy, limit } from "firebase/firestore";
 import { db } from "../../lib/firebase";
+
+type LectureLog = {
+  id: string;
+  lectureId: string;
+  title: string;
+  startedAt: string;
+  endedAt: string;
+  durationSeconds: number;
+  watchedSeconds: number;
+  videoDurationSeconds: number;
+  watchProgress: number;
+  testStarted: boolean;
+  completed: boolean;
+  updatedAt: string;
+};
 
 type Learner = {
   id: string;
   name?: string;
   department?: string;
+  ageGroup?: string;
+  jobType?: string;
+  profileCompleted?: boolean;
   progress?: number;
   testScore?: number;
   status?: string;
   lastLecture?: string;
   lastUpdated?: string;
+  lectureCount?: number;
+  completedLectureCount?: number;
+  testStartedCount?: number;
+  totalWatchSeconds?: number;
+  lectureLogs?: LectureLog[];
 };
 
 const getProgressText = (progress?: number) => {
@@ -23,8 +46,31 @@ const getProgressText = (progress?: number) => {
 const getStatusText = (learner: Learner) => {
   if (learner.status) return learner.status;
   if ((learner.progress ?? 0) >= 100) return "修了";
-  if ((learner.progress ?? 0) > 0) return "受講中";
+  if ((learner.completedLectureCount ?? 0) > 0 || (learner.testStartedCount ?? 0) > 0) {
+    return "受講中";
+  }
+  if ((learner.lectureCount ?? 0) > 0) return "視聴中";
   return "未開始";
+};
+
+const formatWatchTime = (seconds?: number) => {
+  if (!seconds || seconds <= 0) return "0秒";
+
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+
+  if (minutes <= 0) return `${remainingSeconds}秒`;
+  return `${minutes}分${remainingSeconds}秒`;
+};
+
+const formatProgress = (value?: number) => {
+  if (typeof value !== "number" || Number.isNaN(value)) return 0;
+  return Math.min(Math.max(value, 0), 100);
+};
+
+const escapeCsvValue = (value: string | number | undefined) => {
+  const stringValue = value === undefined ? "" : String(value);
+  return `"${stringValue.replace(/"/g, '""')}"`;
 };
 
 export default function AdminPage() {
@@ -39,25 +85,140 @@ export default function AdminPage() {
         const learnersQuery = collection(db, "users");
         const snapshot = await getDocs(learnersQuery);
 
-        const fetchedLearners = snapshot.docs.map((doc) => {
-          const data = doc.data();
+        const fetchedLearners = await Promise.all(
+          snapshot.docs.map(async (doc) => {
+            const data = doc.data();
 
-          return {
-            id: doc.id,
-            name: typeof data.name === "string" ? data.name : doc.id,
-            department: typeof data.department === "string" ? data.department : "未設定",
-            progress: typeof data.progress === "number" ? data.progress : 0,
-            testScore: typeof data.testScore === "number" ? data.testScore : undefined,
-            status: typeof data.status === "string" ? data.status : undefined,
-            lastLecture: typeof data.lastLecture === "string" ? data.lastLecture : "未記録",
-            lastUpdated: typeof data.lastUpdated === "string" ? data.lastUpdated : "未記録",
-          };
-        });
+            let lectureCount = 0;
+            let totalWatchSeconds = 0;
+            let latestLecture = "未記録";
+            const lectureLogs: LectureLog[] = [];
+            let completedLectureCount = 0;
+            let testStartedCount = 0;
+
+            try {
+              const lectureLogsRef = collection(db, "users", doc.id, "lectureLogs");
+              const lectureSnapshot = await getDocs(lectureLogsRef);
+
+              lectureCount = lectureSnapshot.size;
+
+              lectureSnapshot.forEach((lectureDoc) => {
+                const lectureData = lectureDoc.data();
+                const durationSeconds =
+                  typeof lectureData.durationSeconds === "number"
+                    ? lectureData.durationSeconds
+                    : 0;
+
+                const watchedSeconds =
+                  typeof lectureData.watchedSeconds === "number"
+                    ? lectureData.watchedSeconds
+                    : durationSeconds;
+                const videoDurationSeconds =
+                  typeof lectureData.videoDurationSeconds === "number"
+                    ? lectureData.videoDurationSeconds
+                    : 0;
+                const watchProgress =
+                  typeof lectureData.watchProgress === "number"
+                    ? lectureData.watchProgress
+                    : videoDurationSeconds > 0
+                    ? Math.round((watchedSeconds / videoDurationSeconds) * 100)
+                    : 0;
+                const completed = lectureData.completed === true;
+                const testStarted = lectureData.testStarted === true;
+
+                if (completed) completedLectureCount += 1;
+                if (testStarted) testStartedCount += 1;
+
+                totalWatchSeconds += watchedSeconds;
+
+                lectureLogs.push({
+                  id: lectureDoc.id,
+                  lectureId:
+                    typeof lectureData.lectureId === "string"
+                      ? lectureData.lectureId
+                      : lectureDoc.id,
+                  title:
+                    typeof lectureData.title === "string"
+                      ? lectureData.title
+                      : `講義${lectureDoc.id}`,
+                  startedAt:
+                    typeof lectureData.startedAt === "string"
+                      ? lectureData.startedAt
+                      : "未記録",
+                  endedAt:
+                    typeof lectureData.endedAt === "string"
+                      ? lectureData.endedAt
+                      : "未記録",
+                  durationSeconds,
+                  watchedSeconds,
+                  videoDurationSeconds,
+                  watchProgress: formatProgress(watchProgress),
+                  testStarted,
+                  completed,
+                  updatedAt:
+                    typeof lectureData.updatedAt === "string"
+                      ? lectureData.updatedAt
+                      : "未記録",
+                });
+              });
+
+              lectureLogs.sort((a, b) => Number(a.lectureId) - Number(b.lectureId));
+
+              const latestQuery = query(
+                lectureLogsRef,
+                orderBy("startedAt", "desc"),
+                limit(1)
+              );
+
+              const latestSnapshot = await getDocs(latestQuery);
+
+              if (!latestSnapshot.empty) {
+                const latestData = latestSnapshot.docs[0].data();
+                latestLecture =
+                  typeof latestData.title === "string"
+                    ? latestData.title
+                    : `講義${latestSnapshot.docs[0].id}`;
+              }
+            } catch (error) {
+              console.error("lectureLogs取得エラー", error);
+            }
+
+            // get total number of lessons for progress calculation
+            const totalLessons =
+              typeof data.totalLessons === "number"
+                ? data.totalLessons
+                : undefined;
+            return {
+              id: doc.id,
+              name: typeof data.name === "string" ? data.name : doc.id,
+              department: typeof data.department === "string" ? data.department : "未設定",
+              ageGroup: typeof data.ageGroup === "string" ? data.ageGroup : "未設定",
+              jobType: typeof data.jobType === "string" ? data.jobType : "未設定",
+              profileCompleted: data.profileCompleted === true,
+              progress: totalLessons > 0 ? Math.round((completedLectureCount / totalLessons) * 100) : 0,
+              testScore: typeof data.testScore === "number" ? data.testScore : undefined,
+              status: typeof data.status === "string" ? data.status : undefined,
+              lastLecture:
+                typeof data.lastLecture === "string" ? data.lastLecture : latestLecture,
+              lastUpdated:
+                typeof data.lastUpdated === "string" ? data.lastUpdated : "未記録",
+              lectureCount,
+              completedLectureCount,
+              testStartedCount,
+              totalWatchSeconds,
+              lectureLogs,
+            };
+          })
+        );
 
         setLearners(fetchedLearners);
       } catch (error) {
         console.error("受講者取得エラー", error);
-        setErrorMessage(`受講者データの読み込みに失敗しました。Firestore の users コレクションまたはセキュリティルールを確認してください。詳細: ${error instanceof Error ? error.message : String(error)}`);
+        setErrorMessage(
+          `受講者データの読み込みに失敗しました。Firestore の users コレクションまたはセキュリティルールを確認してください。詳細: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
       } finally {
         setLoading(false);
       }
@@ -74,18 +235,140 @@ export default function AdminPage() {
     return learners.filter((learner) => {
       const name = learner.name?.toLowerCase() ?? "";
       const department = learner.department?.toLowerCase() ?? "";
+      const ageGroup = learner.ageGroup?.toLowerCase() ?? "";
+      const jobType = learner.jobType?.toLowerCase() ?? "";
       const status = getStatusText(learner).toLowerCase();
 
       return (
         name.includes(trimmedKeyword) ||
         department.includes(trimmedKeyword) ||
+        ageGroup.includes(trimmedKeyword) ||
+        jobType.includes(trimmedKeyword) ||
         status.includes(trimmedKeyword)
       );
     });
   }, [learners, keyword]);
 
+  const lectureLogRows = filteredLearners.flatMap((learner) =>
+    (learner.lectureLogs ?? []).map((log) => ({
+      learnerId: learner.id,
+      learnerName: learner.name ?? learner.id,
+      department: learner.department ?? "未設定",
+      ageGroup: learner.ageGroup ?? "未設定",
+      jobType: learner.jobType ?? "未設定",
+      ...log,
+    }))
+  );
+
+  const handleDownloadLectureLogsCsv = () => {
+    const headers = [
+      "受講者ID",
+      "氏名",
+      "所属",
+      "年代",
+      "職種",
+      "講義ID",
+      "講義名",
+      "視聴開始",
+      "視聴終了",
+      "ページ滞在時間（秒）",
+      "実視聴時間（秒）",
+      "動画時間（秒）",
+      "視聴率（%）",
+      "テスト開始",
+      "完了",
+    ];
+
+    const rows = lectureLogRows.map((log) => [
+      log.learnerId,
+      log.learnerName,
+      log.department,
+      log.ageGroup,
+      log.jobType,
+      log.lectureId,
+      log.title,
+      log.startedAt,
+      log.endedAt,
+      log.durationSeconds,
+      log.watchedSeconds,
+      log.videoDurationSeconds,
+      log.watchProgress,
+      log.testStarted ? "開始済み" : "未開始",
+      log.completed ? "完了" : "未完了",
+    ]);
+
+    const csvContent = [headers, ...rows]
+      .map((row) => row.map((value) => escapeCsvValue(value)).join(","))
+      .join("\n");
+
+    const bom = "\uFEFF";
+    const blob = new Blob([bom + csvContent], {
+      type: "text/csv;charset=utf-8;",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `受講ログ_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadLearnersCsv = () => {
+    const headers = [
+      "受講者ID",
+      "氏名",
+      "所属",
+      "年代",
+      "職種",
+      "初回登録",
+      "進捗率（%）",
+      "視聴講義数",
+      "テスト開始数",
+      "完了講義数",
+      "総視聴時間（秒）",
+      "受講状況",
+    ];
+
+    const rows = filteredLearners.map((learner) => [
+      learner.id,
+      learner.name ?? learner.id,
+      learner.department ?? "未設定",
+      learner.ageGroup ?? "未設定",
+      learner.jobType ?? "未設定",
+      learner.profileCompleted ? "登録済み" : "未登録",
+      learner.progress ?? 0,
+      learner.lectureCount ?? 0,
+      learner.testStartedCount ?? 0,
+      learner.completedLectureCount ?? 0,
+      learner.totalWatchSeconds ?? 0,
+      getStatusText(learner),
+    ]);
+
+    const csvContent = [headers, ...rows]
+      .map((row) => row.map((value) => escapeCsvValue(value)).join(","))
+      .join("\n");
+
+    const bom = "\uFEFF";
+    const blob = new Blob([bom + csvContent], {
+      type: "text/csv;charset=utf-8;",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `受講者進捗_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const completedCount = learners.filter((learner) => (learner.progress ?? 0) >= 100).length;
-  const needCheckCount = learners.filter((learner) => (learner.progress ?? 0) < 100).length;
+  const inProgressCount = learners.filter(
+    (learner) => (learner.progress ?? 0) > 0 && (learner.progress ?? 0) < 100
+  ).length;
+  const notStartedCount = learners.filter((learner) => (learner.lectureCount ?? 0) === 0).length;
   const averageProgress = learners.length
     ? Math.round(
         learners.reduce((sum, learner) => sum + (learner.progress ?? 0), 0) / learners.length
@@ -94,11 +377,11 @@ export default function AdminPage() {
 
   return (
     <main className="min-h-screen bg-slate-50 px-6 py-10">
-      <div className="max-w-6xl mx-auto space-y-8">
+      <div className="max-w-7xl mx-auto space-y-8">
         <div className="rounded-3xl bg-slate-900 text-white p-8 shadow-lg">
           <h1 className="text-4xl font-bold mb-3">管理者画面</h1>
           <p className="text-slate-300 leading-7">
-            Firestore に登録された受講者の受講状況やテスト結果を確認できます。
+            Firestore に登録された受講者の受講状況、テスト結果、視聴ログを確認できます。
           </p>
         </div>
 
@@ -114,13 +397,14 @@ export default function AdminPage() {
           </div>
 
           <div className="rounded-2xl bg-white border shadow-sm p-6">
-            <p className="text-sm text-slate-500 mb-2">要確認者</p>
-            <p className="text-4xl font-bold text-red-500">{needCheckCount}</p>
+            <p className="text-sm text-slate-500 mb-2">受講中</p>
+            <p className="text-4xl font-bold text-amber-500">{inProgressCount}</p>
           </div>
 
           <div className="rounded-2xl bg-white border shadow-sm p-6">
-            <p className="text-sm text-slate-500 mb-2">平均進捗率</p>
-            <p className="text-4xl font-bold text-slate-900">{averageProgress}%</p>
+            <p className="text-sm text-slate-500 mb-2">未開始</p>
+            <p className="text-4xl font-bold text-slate-900">{notStartedCount}</p>
+            <p className="text-xs text-slate-500 mt-2">平均進捗率 {averageProgress}%</p>
           </div>
         </div>
 
@@ -133,12 +417,23 @@ export default function AdminPage() {
               </p>
             </div>
 
-            <input
-              value={keyword}
-              onChange={(event) => setKeyword(event.target.value)}
-              placeholder="氏名・所属・状況で検索"
-              className="w-full md:w-80 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-300"
-            />
+            <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto">
+              <input
+                value={keyword}
+                onChange={(event) => setKeyword(event.target.value)}
+                placeholder="氏名・所属・年代・職種・状況で検索"
+                className="w-full md:w-80 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-300"
+              />
+
+              <button
+                type="button"
+                onClick={handleDownloadLearnersCsv}
+                disabled={filteredLearners.length === 0}
+                className="inline-flex items-center justify-center rounded-lg bg-slate-900 text-white px-5 py-2.5 text-sm font-medium hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 transition"
+              >
+                進捗CSV出力
+              </button>
+            </div>
           </div>
 
           {loading && (
@@ -161,14 +456,17 @@ export default function AdminPage() {
 
           {!loading && !errorMessage && filteredLearners.length > 0 && (
             <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
+              <table className="w-full min-w-[1100px] border-collapse">
                 <thead>
                   <tr className="border-b bg-slate-100 text-left text-sm text-slate-700">
                     <th className="px-4 py-3">氏名</th>
                     <th className="px-4 py-3">所属</th>
+                    <th className="px-4 py-3">年代</th>
+                    <th className="px-4 py-3">職種</th>
                     <th className="px-4 py-3">進捗</th>
-                    <th className="px-4 py-3">テスト点数</th>
+                    <th className="px-4 py-3">視聴/テスト/完了</th>
                     <th className="px-4 py-3">最終講義</th>
+                    <th className="px-4 py-3">総視聴時間</th>
                     <th className="px-4 py-3">受講状況</th>
                   </tr>
                 </thead>
@@ -185,6 +483,8 @@ export default function AdminPage() {
                       >
                         <td className="px-4 py-4 font-medium">{learner.name}</td>
                         <td className="px-4 py-4">{learner.department}</td>
+                        <td className="px-4 py-4">{learner.ageGroup}</td>
+                        <td className="px-4 py-4">{learner.jobType}</td>
                         <td className="px-4 py-4 min-w-44">
                           <div className="flex items-center gap-3">
                             <div className="h-2 w-28 rounded-full bg-slate-200 overflow-hidden">
@@ -197,9 +497,12 @@ export default function AdminPage() {
                           </div>
                         </td>
                         <td className="px-4 py-4">
-                          {typeof learner.testScore === "number" ? `${learner.testScore}点` : "未記録"}
+                          {(learner.lectureCount ?? 0)}視聴 / {(learner.testStartedCount ?? 0)}テスト / {(learner.completedLectureCount ?? 0)}完了
                         </td>
                         <td className="px-4 py-4">{learner.lastLecture}</td>
+                        <td className="px-4 py-4">
+                          {formatWatchTime(learner.totalWatchSeconds)}
+                        </td>
                         <td className="px-4 py-4">
                           <span
                             className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${
@@ -216,6 +519,73 @@ export default function AdminPage() {
                       </tr>
                     );
                   })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-2xl bg-white border shadow-sm p-6 space-y-4">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-bold text-slate-900">視聴ログ詳細</h2>
+              <p className="text-sm text-slate-500 mt-1">
+                講義ごとの視聴開始時刻、終了時刻、視聴時間を確認できます。
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleDownloadLectureLogsCsv}
+              disabled={lectureLogRows.length === 0}
+              className="inline-flex items-center justify-center rounded-lg bg-slate-900 text-white px-5 py-2.5 text-sm font-medium hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 transition"
+            >
+              CSV出力
+            </button>
+          </div>
+
+          {!loading && lectureLogRows.length === 0 && (
+            <div className="rounded-xl bg-slate-50 border border-slate-200 p-6 text-slate-600">
+              視聴ログはまだありません。
+            </div>
+          )}
+
+          {!loading && lectureLogRows.length > 0 && (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[1100px] border-collapse">
+                <thead>
+                  <tr className="border-b bg-slate-100 text-left text-sm text-slate-700">
+                    <th className="px-4 py-3">氏名</th>
+                    <th className="px-4 py-3">所属</th>
+                    <th className="px-4 py-3">職種</th>
+                    <th className="px-4 py-3">講義ID</th>
+                    <th className="px-4 py-3">講義名</th>
+                    <th className="px-4 py-3">視聴開始</th>
+                    <th className="px-4 py-3">実視聴</th>
+                    <th className="px-4 py-3">視聴率</th>
+                    <th className="px-4 py-3">テスト</th>
+                    <th className="px-4 py-3">完了</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {lectureLogRows.map((log) => (
+                    <tr
+                      key={`${log.learnerId}-${log.id}`}
+                      className="border-b text-sm text-slate-700 hover:bg-slate-50"
+                    >
+                      <td className="px-4 py-4 font-medium">{log.learnerName}</td>
+                      <td className="px-4 py-4">{log.department}</td>
+                      <td className="px-4 py-4">{log.jobType}</td>
+                      <td className="px-4 py-4">{log.lectureId}</td>
+                      <td className="px-4 py-4">{log.title}</td>
+                      <td className="px-4 py-4">{log.startedAt}</td>
+                      <td className="px-4 py-4">{formatWatchTime(log.watchedSeconds)}</td>
+                      <td className="px-4 py-4">{log.watchProgress}%</td>
+                      <td className="px-4 py-4">{log.testStarted ? "開始済み" : "未開始"}</td>
+                      <td className="px-4 py-4">{log.completed ? "完了" : "未完了"}</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>

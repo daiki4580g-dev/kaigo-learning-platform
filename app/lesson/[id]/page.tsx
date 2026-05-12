@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
-import { doc, getDoc } from "firebase/firestore";
-import { db } from "../../../lib/firebase";
+import { useParams, useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth, db } from "../../../lib/firebase";
 
 type Lesson = {
   title?: string;
@@ -17,28 +18,58 @@ type Lesson = {
   videoUrl?: string;
 };
 
-const getYouTubeEmbedUrl = (url?: string) => {
+type YouTubePlayer = {
+  playVideo: () => void;
+  pauseVideo: () => void;
+  getCurrentTime: () => number;
+  getDuration: () => number;
+  destroy: () => void;
+};
+
+declare global {
+  interface Window {
+    YT?: {
+      Player: new (
+        elementId: string,
+        options: {
+          videoId: string;
+          playerVars?: Record<string, number | string>;
+          events?: {
+            onReady?: () => void;
+            onStateChange?: (event: { data: number }) => void;
+          };
+        }
+      ) => YouTubePlayer;
+      PlayerState: {
+        PLAYING: number;
+        PAUSED: number;
+        ENDED: number;
+      };
+    };
+    onYouTubeIframeAPIReady?: () => void;
+  }
+}
+
+const getYouTubeVideoId = (url?: string) => {
   if (!url) return "";
 
   const trimmedUrl = url.trim();
 
   if (trimmedUrl.includes("youtu.be/")) {
-    const videoId = trimmedUrl.split("youtu.be/")[1]?.split("?")[0];
-    return videoId ? `https://www.youtube.com/embed/${videoId}?autoplay=0&rel=0` : "";
+    return trimmedUrl.split("youtu.be/")[1]?.split("?")[0] || "";
   }
 
   if (trimmedUrl.includes("youtube.com/watch")) {
     try {
       const parsedUrl = new URL(trimmedUrl);
-      const videoId = parsedUrl.searchParams.get("v");
-      return videoId ? `https://www.youtube.com/embed/${videoId}?autoplay=0&rel=0` : "";
+      return parsedUrl.searchParams.get("v") || "";
     } catch {
       return "";
     }
   }
 
   if (trimmedUrl.includes("youtube.com/embed/")) {
-    return trimmedUrl;
+    return trimmedUrl.split("youtube.com/embed/")[1]?.split("?")[0] || "";
   }
 
   return "";
@@ -46,11 +77,37 @@ const getYouTubeEmbedUrl = (url?: string) => {
 
 export default function LessonDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
+
+  const playerRef = useRef<YouTubePlayer | null>(null);
+  const watchIntervalRef = useRef<number | null>(null);
 
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
+  const [startedAt, setStartedAt] = useState<Date | null>(null);
+  const [watchedSeconds, setWatchedSeconds] = useState(0);
+  const [videoDurationSeconds, setVideoDurationSeconds] = useState(0);
+  const [canStartTest, setCanStartTest] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        router.push("/login");
+        return;
+      }
+
+      localStorage.setItem("uid", user.uid);
+      localStorage.setItem("learnerId", user.uid);
+      localStorage.setItem("userId", user.uid);
+      localStorage.setItem("userEmail", user.email || "");
+
+      setCheckingAuth(false);
+    });
+
+    return () => unsubscribe();
+  }, [router]);
 
   useEffect(() => {
     const fetchLesson = async () => {
@@ -81,6 +138,155 @@ export default function LessonDetailPage() {
     fetchLesson();
   }, [id]);
 
+  useEffect(() => {
+    if (!id || !lesson) return;
+
+    const startTime = new Date();
+    setStartedAt(startTime);
+    setWatchedSeconds(0);
+    setVideoDurationSeconds(0);
+    setCanStartTest(false);
+
+    const learnerId =
+      window.localStorage.getItem("learnerId") ||
+      window.localStorage.getItem("userId") ||
+      window.localStorage.getItem("studentId") ||
+      "kaigo010";
+
+    const saveStartLog = async () => {
+      try {
+        await setDoc(
+          doc(db, "users", learnerId, "lectureLogs", String(id)),
+          {
+            lectureId: String(id),
+            title: lesson.title || `講義${id}`,
+            startedAt: startTime.toLocaleString("ja-JP"),
+            startedAtTimestamp: serverTimestamp(),
+            completed: false,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        );
+      } catch (error) {
+        console.error("視聴開始ログ保存エラー", error);
+      }
+    };
+
+    saveStartLog();
+  }, [id, lesson]);
+
+  useEffect(() => {
+    const videoId = getYouTubeVideoId(lesson?.videoUrl);
+    if (!videoId) return;
+
+    const playerElementId = "youtube-lecture-player";
+
+    const stopWatchTimer = () => {
+      if (watchIntervalRef.current !== null) {
+        window.clearInterval(watchIntervalRef.current);
+        watchIntervalRef.current = null;
+      }
+    };
+
+    const startWatchTimer = () => {
+      if (watchIntervalRef.current !== null) return;
+
+      watchIntervalRef.current = window.setInterval(() => {
+        const player = playerRef.current;
+        if (!player) return;
+
+        const duration = Math.floor(player.getDuration() || 0);
+        const currentTime = Math.floor(player.getCurrentTime() || 0);
+
+        if (duration > 0) {
+          setVideoDurationSeconds(duration);
+        }
+
+        setWatchedSeconds((prev) => {
+          const nextWatchedSeconds = Math.max(prev, currentTime);
+          const requiredSeconds = Math.ceil(duration * 0.9);
+
+          if (duration > 0 && nextWatchedSeconds >= requiredSeconds) {
+            setCanStartTest(true);
+            stopWatchTimer();
+          }
+
+          return nextWatchedSeconds;
+        });
+      }, 1000);
+    };
+
+    const createPlayer = () => {
+      if (!window.YT || playerRef.current) return;
+
+      playerRef.current = new window.YT.Player(playerElementId, {
+        videoId,
+        playerVars: {
+          autoplay: 0,
+          rel: 0,
+          modestbranding: 1,
+        },
+        events: {
+          onReady: () => {
+            const duration = Math.floor(playerRef.current?.getDuration() || 0);
+            if (duration > 0) {
+              setVideoDurationSeconds(duration);
+            }
+          },
+          onStateChange: (event) => {
+            if (!window.YT) return;
+
+            if (event.data === window.YT.PlayerState.PLAYING) {
+              startWatchTimer();
+              return;
+            }
+
+            if (
+              event.data === window.YT.PlayerState.PAUSED ||
+              event.data === window.YT.PlayerState.ENDED
+            ) {
+              stopWatchTimer();
+            }
+          },
+        },
+      });
+    };
+
+    if (window.YT?.Player) {
+      createPlayer();
+    } else {
+      const existingScript = document.querySelector(
+        'script[src="https://www.youtube.com/iframe_api"]'
+      );
+
+      if (!existingScript) {
+        const script = document.createElement("script");
+        script.src = "https://www.youtube.com/iframe_api";
+        document.body.appendChild(script);
+      }
+
+      window.onYouTubeIframeAPIReady = createPlayer;
+    }
+
+    return () => {
+      stopWatchTimer();
+      playerRef.current?.destroy();
+      playerRef.current = null;
+    };
+  }, [lesson?.videoUrl]);
+
+  if (checkingAuth) {
+    return (
+      <main className="min-h-screen bg-slate-50 px-6 py-10 flex items-center justify-center">
+        <div className="rounded-2xl bg-white border shadow-sm p-8 text-center">
+          <p className="text-slate-700 font-medium">
+            ログイン状態を確認しています...
+          </p>
+        </div>
+      </main>
+    );
+  }
+
   if (loading) {
     return (
       <main className="min-h-screen bg-slate-50 px-6 py-10">
@@ -110,7 +316,56 @@ export default function LessonDetailPage() {
     );
   }
 
-  const embedUrl = getYouTubeEmbedUrl(lesson.videoUrl);
+  const videoId = getYouTubeVideoId(lesson.videoUrl);
+  const requiredSeconds = videoDurationSeconds > 0 ? Math.ceil(videoDurationSeconds * 0.9) : 0;
+  const remainingSeconds = Math.max(requiredSeconds - watchedSeconds, 0);
+  const watchProgress =
+    videoDurationSeconds > 0
+      ? Math.min(Math.round((watchedSeconds / videoDurationSeconds) * 100), 100)
+      : 0;
+
+  const handleStartTest = async () => {
+    if (!canStartTest) {
+      alert("講義を最後まで視聴すると、テストを開始できます。");
+      return;
+    }
+    if (!id || !lesson) return;
+
+    const learnerId =
+      window.localStorage.getItem("learnerId") ||
+      window.localStorage.getItem("userId") ||
+      window.localStorage.getItem("studentId") ||
+      "kaigo010";
+
+    const endTime = new Date();
+    const startTime = startedAt ?? endTime;
+    const durationSeconds = Math.max(
+      0,
+      Math.round((endTime.getTime() - startTime.getTime()) / 1000)
+    );
+
+    try {
+      await setDoc(
+        doc(db, "users", learnerId, "lectureLogs", String(id)),
+        {
+          lectureId: String(id),
+          title: lesson.title || `講義${id}`,
+          startedAt: startTime.toLocaleString("ja-JP"),
+          endedAt: endTime.toLocaleString("ja-JP"),
+          durationSeconds,
+          watchedSeconds,
+          videoDurationSeconds,
+          watchProgress,
+          completed: false,
+          testStarted: true,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+    } catch (error) {
+      console.error("視聴終了ログ保存エラー", error);
+    }
+  };
 
   return (
     <main className="min-h-screen bg-slate-50 px-6 py-10">
@@ -126,16 +381,9 @@ export default function LessonDetailPage() {
         </div>
 
         <div className="rounded-2xl bg-white border shadow-sm p-6 mb-8">
-          {embedUrl ? (
+          {videoId ? (
             <div className="aspect-video w-full overflow-hidden rounded-xl bg-black">
-              <iframe
-                className="h-full w-full border-0"
-                src={embedUrl}
-                title={lesson.title || "講義動画"}
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                referrerPolicy="strict-origin-when-cross-origin"
-                allowFullScreen
-              />
+              <div id="youtube-lecture-player" className="h-full w-full" />
             </div>
           ) : (
             <div className="aspect-video w-full rounded-xl bg-slate-200 flex items-center justify-center text-slate-600 text-lg font-medium">
@@ -144,7 +392,7 @@ export default function LessonDetailPage() {
           )}
 
           {lesson.videoUrl && (
-            <div className="mt-4 space-y-3">
+            <div className="mt-4 space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <p className="text-sm text-slate-500">
                   動画が表示されない場合は、YouTubeで直接開いてください。
@@ -159,9 +407,24 @@ export default function LessonDetailPage() {
                 </a>
               </div>
 
-              <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 text-xs text-slate-600 break-all">
-                <p>Firestore videoUrl: {lesson.videoUrl}</p>
-                <p>Embed URL: {embedUrl}</p>
+              <div className="rounded-xl bg-slate-50 border border-slate-200 p-4">
+                <div className="flex items-center justify-between text-sm text-slate-600 mb-2">
+                  <span>視聴進捗</span>
+                  <span>{watchProgress}%</span>
+                </div>
+                <div className="h-2 w-full rounded-full bg-slate-200 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-slate-900 transition-all"
+                    style={{ width: `${watchProgress}%` }}
+                  />
+                </div>
+                <p className="text-xs text-slate-500 mt-2">
+                  {canStartTest
+                    ? "動画の90%以上を視聴しました。テストを開始できます。"
+                    : videoDurationSeconds > 0
+                    ? `あと${remainingSeconds}秒ほど視聴するとテストを開始できます。`
+                    : "動画を再生すると視聴時間の計測が始まります。"}
+                </p>
               </div>
             </div>
           )}
@@ -178,10 +441,15 @@ export default function LessonDetailPage() {
 
         <div className="flex flex-col sm:flex-row gap-4">
           <Link
-            href={`/test/${id}`}
-            className="inline-flex items-center justify-center rounded-lg bg-slate-900 text-white px-6 py-3 font-medium hover:bg-slate-800 transition"
+            href={canStartTest ? `/test/${id}` : "#"}
+            onClick={handleStartTest}
+            className={`inline-flex items-center justify-center rounded-lg px-6 py-3 font-medium transition ${
+              canStartTest
+                ? "bg-slate-900 text-white hover:bg-slate-800"
+                : "bg-slate-300 text-slate-500 cursor-not-allowed"
+            }`}
           >
-            テストを開始する
+            {canStartTest ? "テストを開始する" : "視聴完了後にテスト開始"}
           </Link>
 
           <Link
