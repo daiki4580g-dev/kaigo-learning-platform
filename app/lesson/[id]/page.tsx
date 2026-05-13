@@ -82,6 +82,7 @@ export default function LessonDetailPage() {
 
   const playerRef = useRef<YouTubePlayer | null>(null);
   const watchIntervalRef = useRef<number | null>(null);
+  const hasSavedStartLogRef = useRef(false);
 
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [loading, setLoading] = useState(true);
@@ -141,38 +142,11 @@ export default function LessonDetailPage() {
   useEffect(() => {
     if (!id || !lesson) return;
 
-    const startTime = new Date();
-    setStartedAt(startTime);
+    setStartedAt(null);
     setWatchedSeconds(0);
     setVideoDurationSeconds(0);
     setCanStartTest(false);
-
-    const learnerId =
-      window.localStorage.getItem("learnerId") ||
-      window.localStorage.getItem("userId") ||
-      window.localStorage.getItem("studentId") ||
-      "kaigo010";
-
-    const saveStartLog = async () => {
-      try {
-        await setDoc(
-          doc(db, "users", learnerId, "lectureLogs", String(id)),
-          {
-            lectureId: String(id),
-            title: lesson.title || `講義${id}`,
-            startedAt: startTime.toLocaleString("ja-JP"),
-            startedAtTimestamp: serverTimestamp(),
-            completed: false,
-            updatedAt: serverTimestamp(),
-          },
-          { merge: true }
-        );
-      } catch (error) {
-        console.error("視聴開始ログ保存エラー", error);
-      }
-    };
-
-    saveStartLog();
+    hasSavedStartLogRef.current = false;
   }, [id, lesson]);
 
   useEffect(() => {
@@ -237,14 +211,54 @@ export default function LessonDetailPage() {
             if (!window.YT) return;
 
             if (event.data === window.YT.PlayerState.PLAYING) {
+              if (!hasSavedStartLogRef.current) {
+                const startTime = new Date();
+                const learnerId =
+                  window.localStorage.getItem("learnerId") ||
+                  window.localStorage.getItem("userId") ||
+                  window.localStorage.getItem("studentId") ||
+                  "kaigo010";
+
+                hasSavedStartLogRef.current = true;
+                setStartedAt(startTime);
+
+                setDoc(
+                  doc(db, "users", learnerId, "lectureLogs", String(id)),
+                  {
+                    lectureId: String(id),
+                    title: lesson.title || `講義${id}`,
+                    startedAt: startTime.toLocaleString("ja-JP"),
+                    startedAtTimestamp: serverTimestamp(),
+                    completed: false,
+                    testStarted: false,
+                    watchProgress: 0,
+                    updatedAt: serverTimestamp(),
+                  },
+                  { merge: true }
+                ).catch((error) => {
+                  console.error("視聴開始ログ保存エラー", error);
+                });
+              }
+
               startWatchTimer();
               return;
             }
 
-            if (
-              event.data === window.YT.PlayerState.PAUSED ||
-              event.data === window.YT.PlayerState.ENDED
-            ) {
+            if (event.data === window.YT.PlayerState.ENDED) {
+              const player = playerRef.current;
+              const duration = Math.floor(player?.getDuration() || 0);
+
+              if (duration > 0) {
+                setVideoDurationSeconds(duration);
+                setWatchedSeconds(duration);
+              }
+
+              setCanStartTest(true);
+              stopWatchTimer();
+              return;
+            }
+
+            if (event.data === window.YT.PlayerState.PAUSED) {
               stopWatchTimer();
             }
           },
@@ -362,8 +376,11 @@ export default function LessonDetailPage() {
         },
         { merge: true }
       );
+
+      router.push(`/test/${id}`);
     } catch (error) {
       console.error("視聴終了ログ保存エラー", error);
+      setErrorMessage("視聴ログの保存に失敗しました。もう一度お試しください。");
     }
   };
 
@@ -440,9 +457,13 @@ export default function LessonDetailPage() {
         </div>
 
         <div className="flex flex-col sm:flex-row gap-4">
-          <Link
-            href={canStartTest ? `/test/${id}` : "#"}
+          <p className="text-sm text-slate-500 mb-2">
+            確認テストは、動画の90%以上を視聴すると開始できます。
+          </p>
+          <button
+            type="button"
             onClick={handleStartTest}
+            disabled={!canStartTest}
             className={`inline-flex items-center justify-center rounded-lg px-6 py-3 font-medium transition ${
               canStartTest
                 ? "bg-slate-900 text-white hover:bg-slate-800"
@@ -450,7 +471,7 @@ export default function LessonDetailPage() {
             }`}
           >
             {canStartTest ? "テストを開始する" : "視聴完了後にテスト開始"}
-          </Link>
+          </button>
 
           <Link
             href="/mypage"

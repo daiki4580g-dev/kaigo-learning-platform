@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { collection, getDocs, query, orderBy, limit } from "firebase/firestore";
 import { db } from "../../lib/firebase";
 
@@ -71,6 +72,21 @@ const formatProgress = (value?: number) => {
 const escapeCsvValue = (value: string | number | undefined) => {
   const stringValue = value === undefined ? "" : String(value);
   return `"${stringValue.replace(/"/g, '""')}"`;
+};
+
+const TOTAL_LESSONS = 60;
+
+const getLessonTitle = (lectureId: number, existingTitle?: string) => {
+  if (existingTitle && existingTitle !== `講義${lectureId}`) return existingTitle;
+  return `講義${lectureId}`;
+};
+
+const getLectureStatus = (log?: LectureLog) => {
+  if (!log) return "未視聴";
+  if (log.completed) return "完了";
+  if (log.testStarted) return "テスト開始済み";
+  if ((log.watchProgress ?? 0) >= 90) return "視聴完了";
+  return "視聴中";
 };
 
 export default function AdminPage() {
@@ -187,7 +203,7 @@ export default function AdminPage() {
             const totalLessons =
               typeof data.totalLessons === "number"
                 ? data.totalLessons
-                : undefined;
+                : TOTAL_LESSONS;
             return {
               id: doc.id,
               name: typeof data.name === "string" ? data.name : doc.id,
@@ -249,15 +265,40 @@ export default function AdminPage() {
     });
   }, [learners, keyword]);
 
-  const lectureLogRows = filteredLearners.flatMap((learner) =>
-    (learner.lectureLogs ?? []).map((log) => ({
-      learnerId: learner.id,
-      learnerName: learner.name ?? learner.id,
-      department: learner.department ?? "未設定",
-      ageGroup: learner.ageGroup ?? "未設定",
-      jobType: learner.jobType ?? "未設定",
-      ...log,
-    }))
+  const lectureLogRows = filteredLearners.flatMap((learner) => {
+    const logsByLectureId = new Map(
+      (learner.lectureLogs ?? []).map((log) => [String(log.lectureId), log])
+    );
+
+    return Array.from({ length: TOTAL_LESSONS }, (_, index) => {
+      const lectureId = String(index + 1);
+      const log = logsByLectureId.get(lectureId);
+
+      return {
+        learnerId: learner.id,
+        learnerName: learner.name ?? learner.id,
+        department: learner.department ?? "未設定",
+        ageGroup: learner.ageGroup ?? "未設定",
+        jobType: learner.jobType ?? "未設定",
+        id: log?.id ?? lectureId,
+        lectureId,
+        title: getLessonTitle(index + 1, log?.title),
+        startedAt: log?.startedAt ?? "未記録",
+        endedAt: log?.endedAt ?? "未記録",
+        durationSeconds: log?.durationSeconds ?? 0,
+        watchedSeconds: log?.watchedSeconds ?? 0,
+        videoDurationSeconds: log?.videoDurationSeconds ?? 0,
+        watchProgress: log?.watchProgress ?? 0,
+        testStarted: log?.testStarted ?? false,
+        completed: log?.completed ?? false,
+        updatedAt: log?.updatedAt ?? "未記録",
+        lectureStatus: getLectureStatus(log),
+      };
+    });
+  });
+
+  const displayedLectureLogRows = lectureLogRows.filter(
+    (log) => log.lectureStatus !== "未視聴"
   );
 
   const handleDownloadLectureLogsCsv = () => {
@@ -277,6 +318,7 @@ export default function AdminPage() {
       "視聴率（%）",
       "テスト開始",
       "完了",
+      "状況",
     ];
 
     const rows = lectureLogRows.map((log) => [
@@ -295,6 +337,7 @@ export default function AdminPage() {
       log.watchProgress,
       log.testStarted ? "開始済み" : "未開始",
       log.completed ? "完了" : "未完了",
+      log.lectureStatus,
     ]);
 
     const csvContent = [headers, ...rows]
@@ -385,6 +428,41 @@ export default function AdminPage() {
           </p>
         </div>
 
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <a
+            href="#learner-status"
+            className="rounded-2xl bg-white border shadow-sm p-6 hover:shadow-md transition block"
+          >
+            <p className="text-sm text-slate-500 mb-2">受講状況</p>
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">受講者管理</h2>
+            <p className="text-sm text-slate-600 leading-6">
+              受講者ごとの進捗、視聴時間、テスト開始状況を確認します。
+            </p>
+          </a>
+
+          <Link
+            href="/admin/lessons"
+            className="rounded-2xl bg-white border shadow-sm p-6 hover:shadow-md transition block"
+          >
+            <p className="text-sm text-slate-500 mb-2">講義管理</p>
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">講義を追加・編集</h2>
+            <p className="text-sm text-slate-600 leading-6">
+              講義タイトル、YouTube URL、コース名、カテゴリを管理します。
+            </p>
+          </Link>
+
+          <Link
+            href="/admin/tests"
+            className="rounded-2xl bg-white border shadow-sm p-6 hover:shadow-md transition block"
+          >
+            <p className="text-sm text-slate-500 mb-2">テスト管理</p>
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">確認テストを作成</h2>
+            <p className="text-sm text-slate-600 leading-6">
+              講義ごとの確認テストを3〜5問で追加・編集します。
+            </p>
+          </Link>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="rounded-2xl bg-white border shadow-sm p-6">
             <p className="text-sm text-slate-500 mb-2">登録受講者数</p>
@@ -408,7 +486,7 @@ export default function AdminPage() {
           </div>
         </div>
 
-        <div className="rounded-2xl bg-white border shadow-sm p-6 space-y-4">
+        <div id="learner-status" className="rounded-2xl bg-white border shadow-sm p-6 space-y-4">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
               <h2 className="text-2xl font-bold text-slate-900">受講者一覧</h2>
@@ -530,7 +608,7 @@ export default function AdminPage() {
             <div>
               <h2 className="text-2xl font-bold text-slate-900">視聴ログ詳細</h2>
               <p className="text-sm text-slate-500 mt-1">
-                講義ごとの視聴開始時刻、終了時刻、視聴時間を確認できます。
+                管理画面には視聴ログがある講義のみ表示します。CSV出力では全60講義分を出力できます。
               </p>
             </div>
 
@@ -544,13 +622,13 @@ export default function AdminPage() {
             </button>
           </div>
 
-          {!loading && lectureLogRows.length === 0 && (
+          {!loading && displayedLectureLogRows.length === 0 && (
             <div className="rounded-xl bg-slate-50 border border-slate-200 p-6 text-slate-600">
-              視聴ログはまだありません。
+              表示できる視聴ログはまだありません。
             </div>
           )}
 
-          {!loading && lectureLogRows.length > 0 && (
+          {!loading && displayedLectureLogRows.length > 0 && (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[1100px] border-collapse">
                 <thead>
@@ -561,15 +639,17 @@ export default function AdminPage() {
                     <th className="px-4 py-3">講義ID</th>
                     <th className="px-4 py-3">講義名</th>
                     <th className="px-4 py-3">視聴開始</th>
+                    <th className="px-4 py-3">視聴終了</th>
                     <th className="px-4 py-3">実視聴</th>
                     <th className="px-4 py-3">視聴率</th>
                     <th className="px-4 py-3">テスト</th>
                     <th className="px-4 py-3">完了</th>
+                    <th className="px-4 py-3">状況</th>
                   </tr>
                 </thead>
 
                 <tbody>
-                  {lectureLogRows.map((log) => (
+                  {displayedLectureLogRows.map((log) => (
                     <tr
                       key={`${log.learnerId}-${log.id}`}
                       className="border-b text-sm text-slate-700 hover:bg-slate-50"
@@ -580,10 +660,26 @@ export default function AdminPage() {
                       <td className="px-4 py-4">{log.lectureId}</td>
                       <td className="px-4 py-4">{log.title}</td>
                       <td className="px-4 py-4">{log.startedAt}</td>
+                      <td className="px-4 py-4">{log.endedAt}</td>
                       <td className="px-4 py-4">{formatWatchTime(log.watchedSeconds)}</td>
                       <td className="px-4 py-4">{log.watchProgress}%</td>
                       <td className="px-4 py-4">{log.testStarted ? "開始済み" : "未開始"}</td>
                       <td className="px-4 py-4">{log.completed ? "完了" : "未完了"}</td>
+                      <td className="px-4 py-4">
+                        <span
+                          className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${
+                            log.lectureStatus === "完了"
+                              ? "bg-emerald-100 text-emerald-700"
+                              : log.lectureStatus === "視聴完了" || log.lectureStatus === "テスト開始済み"
+                              ? "bg-amber-100 text-amber-700"
+                              : log.lectureStatus === "視聴中"
+                              ? "bg-blue-100 text-blue-700"
+                              : "bg-slate-100 text-slate-700"
+                          }`}
+                        >
+                          {log.lectureStatus}
+                        </span>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

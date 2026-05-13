@@ -10,6 +10,7 @@ type Question = {
   id: string;
   question: string;
   options: string[];
+  choices?: string[];
   correctIndex: number;
 };
 
@@ -17,8 +18,6 @@ type FirestoreTest = {
   title?: string;
   description?: string;
   questions?: Question[];
-  questions2?: Question[];
-  questions3?: Question[];
 };
 
 export default function TestDetailPage() {
@@ -54,16 +53,33 @@ export default function TestDetailPage() {
 
         const data = docSnap.data() as FirestoreTest;
 
-        const mergedQuestions = [
-          ...(data.questions ?? []),
-          ...(data.questions2 ?? []),
-          ...(data.questions3 ?? []),
-        ];
+        const normalizedQuestions = (data.questions ?? []).map(
+          (question, index) => ({
+            id:
+              typeof question.id === "string"
+                ? question.id
+                : `question-${index + 1}`,
+            question:
+              typeof question.question === "string"
+                ? question.question
+                : `問題${index + 1}`,
+            options: Array.isArray(question.options)
+              ? question.options
+              : Array.isArray(question.choices)
+              ? question.choices
+              : [],
+            correctIndex:
+              typeof question.correctIndex === "number"
+                ? question.correctIndex
+                : 0,
+          })
+        );
 
         setTest({
           title: data.title ?? "確認テスト",
-          description: data.description ?? "動画の内容を確認するためのテストです。",
-          questions: mergedQuestions,
+          description:
+            data.description ?? "動画の内容を確認するためのテストです。",
+          questions: normalizedQuestions,
         });
       } catch (error) {
         console.error("テスト取得エラー", error);
@@ -108,7 +124,9 @@ export default function TestDetailPage() {
     return answers[question.id] === question.correctIndex ? total + 1 : total;
   }, 0);
 
-  const isPassed = score === test.questions.length;
+  const isPassed =
+    test.questions.length > 0 &&
+    score / test.questions.length >= 0.8;
 
   const handleSelect = (questionId: string, optionIndex: number) => {
     setAnswers((prev) => ({ ...prev, [questionId]: optionIndex }));
@@ -134,7 +152,9 @@ export default function TestDetailPage() {
       return answers[question.id] === question.correctIndex ? total + 1 : total;
     }, 0);
 
-    const isNextPassed = nextScore === test.questions.length;
+    const isNextPassed =
+      test.questions.length > 0 &&
+      nextScore / test.questions.length >= 0.8;
     const scorePercent = Math.round((nextScore / test.questions.length) * 100);
     const learnerId =
       window.localStorage.getItem("learnerId") ||
@@ -148,9 +168,9 @@ export default function TestDetailPage() {
         {
           name: learnerId,
           department: "未設定",
-          progress: isNextPassed ? 100 : 50,
+          progress: isNextPassed ? 100 : 80,
           testScore: scorePercent,
-          status: isNextPassed ? "修了" : "受講中",
+          status: isNextPassed ? "修了" : "テスト再受講",
           lastLecture: `講義${id}`,
           lastUpdated: new Date().toLocaleString("ja-JP"),
           updatedAt: serverTimestamp(),
@@ -169,6 +189,18 @@ export default function TestDetailPage() {
           passed: isNextPassed,
           answers,
           submittedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      await setDoc(
+        doc(db, "users", learnerId, "lectureLogs", String(id)),
+        {
+          lectureId: String(id),
+          testStarted: true,
+          completed: isNextPassed,
+          testScore: scorePercent,
+          updatedAt: serverTimestamp(),
         },
         { merge: true }
       );
@@ -219,7 +251,9 @@ export default function TestDetailPage() {
                 isPassed ? "text-green-700" : "text-red-700"
               }`}
             >
-              {isPassed ? "合格です。" : "不合格です。もう一度確認しましょう。"}
+              {isPassed
+                ? "合格です。お疲れさまでした。"
+                : "80%以上で合格です。もう一度確認しましょう。"}
             </p>
           </div>
         )}
