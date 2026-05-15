@@ -1,6 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth } from "@/lib/firebase";
 
 const curriculum = [
   {
@@ -126,6 +130,38 @@ const curriculum = [
 const totalLessons = curriculum.reduce((sum, unit) => sum + unit.lessons.length, 0);
 
 export default function MyPage() {
+  const router = useRouter();
+  const [checkingAuth, setCheckingAuth] = useState(true);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        router.push("/login");
+        return;
+      }
+
+      localStorage.setItem("uid", user.uid);
+      localStorage.setItem("learnerId", user.uid);
+      localStorage.setItem("userId", user.uid);
+      localStorage.setItem("userEmail", user.email || "");
+      setCheckingAuth(false);
+    });
+
+    return () => unsubscribe();
+  }, [router]);
+
+  if (checkingAuth) {
+    return (
+      <main className="min-h-screen bg-slate-50 flex items-center justify-center px-6">
+        <div className="rounded-2xl bg-white border shadow-sm p-8 text-center">
+          <p className="text-slate-700 font-medium">
+            ログイン状態を確認しています...
+          </p>
+        </div>
+      </main>
+    );
+  }
+
   let lessonNumber = 0;
 
   return (

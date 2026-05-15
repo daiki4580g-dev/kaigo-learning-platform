@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { collection, getDocs, query, orderBy, limit } from "firebase/firestore";
-import { db } from "../../lib/firebase";
+import { collection, doc, getDoc, getDocs, query, orderBy, limit } from "firebase/firestore";
+import { auth, db } from "../../lib/firebase";
 
 type LectureLog = {
   id: string;
@@ -22,6 +23,7 @@ type LectureLog = {
 
 type Learner = {
   id: string;
+  facilityId?: string;
   name?: string;
   department?: string;
   ageGroup?: string;
@@ -90,20 +92,68 @@ const getLectureStatus = (log?: LectureLog) => {
 };
 
 export default function AdminPage() {
+  const router = useRouter();
   const [learners, setLearners] = useState<Learner[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [keyword, setKeyword] = useState("");
+  const [adminRole, setAdminRole] = useState("");
+  const [adminFacilityId, setAdminFacilityId] = useState("");
 
   useEffect(() => {
+    const uid = localStorage.getItem("uid");
+
+    if (!uid) {
+      router.push("/login");
+      return;
+    }
+
     const fetchLearners = async () => {
       try {
+        const adminDoc = await getDoc(doc(db, "users", uid));
+
+        if (!adminDoc.exists()) {
+          alert("管理者情報を確認できませんでした。再ログインしてください。");
+          router.push("/login");
+          return;
+        }
+
+        const adminData = adminDoc.data();
+        const role = typeof adminData.role === "string" ? adminData.role : "";
+        const facilityId =
+          typeof adminData.facilityId === "string" ? adminData.facilityId : "";
+
+        if (role !== "superAdmin" && role !== "facilityAdmin") {
+          alert("管理者のみアクセスできます。");
+          router.push("/");
+          return;
+        }
+
+        if (role === "facilityAdmin" && !facilityId) {
+          alert("施設管理者に facilityId が設定されていません。運営管理者に確認してください。");
+          router.push("/");
+          return;
+        }
+
+        localStorage.setItem("userRole", role);
+        if (facilityId) {
+          localStorage.setItem("facilityId", facilityId);
+        }
+        setAdminRole(role);
+        setAdminFacilityId(facilityId);
+
         const learnersQuery = collection(db, "users");
         const snapshot = await getDocs(learnersQuery);
 
         const fetchedLearners = await Promise.all(
           snapshot.docs.map(async (doc) => {
             const data = doc.data();
+            const learnerFacilityId =
+              typeof data.facilityId === "string" ? data.facilityId : "";
+
+            if (role === "facilityAdmin" && learnerFacilityId !== facilityId) {
+              return null;
+            }
 
             let lectureCount = 0;
             let totalWatchSeconds = 0;
@@ -206,6 +256,7 @@ export default function AdminPage() {
                 : TOTAL_LESSONS;
             return {
               id: doc.id,
+              facilityId: learnerFacilityId,
               name: typeof data.name === "string" ? data.name : doc.id,
               department: typeof data.department === "string" ? data.department : "未設定",
               ageGroup: typeof data.ageGroup === "string" ? data.ageGroup : "未設定",
@@ -227,7 +278,10 @@ export default function AdminPage() {
           })
         );
 
-        setLearners(fetchedLearners);
+        const visibleLearners = fetchedLearners.filter(
+          (learner): learner is Learner => learner !== null
+        );
+        setLearners(visibleLearners);
       } catch (error) {
         console.error("受講者取得エラー", error);
         setErrorMessage(
@@ -241,7 +295,7 @@ export default function AdminPage() {
     };
 
     fetchLearners();
-  }, []);
+  }, [router]);
 
   const filteredLearners = useMemo(() => {
     const trimmedKeyword = keyword.trim().toLowerCase();
@@ -277,6 +331,7 @@ export default function AdminPage() {
       return {
         learnerId: learner.id,
         learnerName: learner.name ?? learner.id,
+        facilityId: learner.facilityId ?? "",
         department: learner.department ?? "未設定",
         ageGroup: learner.ageGroup ?? "未設定",
         jobType: learner.jobType ?? "未設定",
@@ -305,6 +360,7 @@ export default function AdminPage() {
     const headers = [
       "受講者ID",
       "氏名",
+      "施設ID",
       "所属",
       "年代",
       "職種",
@@ -324,6 +380,7 @@ export default function AdminPage() {
     const rows = lectureLogRows.map((log) => [
       log.learnerId,
       log.learnerName,
+      log.facilityId || "未設定",
       log.department,
       log.ageGroup,
       log.jobType,
@@ -362,6 +419,7 @@ export default function AdminPage() {
     const headers = [
       "受講者ID",
       "氏名",
+      "施設ID",
       "所属",
       "年代",
       "職種",
@@ -377,6 +435,7 @@ export default function AdminPage() {
     const rows = filteredLearners.map((learner) => [
       learner.id,
       learner.name ?? learner.id,
+      learner.facilityId ?? "未設定",
       learner.department ?? "未設定",
       learner.ageGroup ?? "未設定",
       learner.jobType ?? "未設定",
@@ -426,6 +485,16 @@ export default function AdminPage() {
           <p className="text-slate-300 leading-7">
             Firestore に登録された受講者の受講状況、テスト結果、視聴ログを確認できます。
           </p>
+          <div className="mt-4 flex flex-wrap gap-2 text-sm">
+            <span className="rounded-full bg-white/10 px-3 py-1 text-slate-200">
+              権限：{adminRole === "superAdmin" ? "運営管理者" : "施設管理者"}
+            </span>
+            {adminFacilityId && (
+              <span className="rounded-full bg-white/10 px-3 py-1 text-slate-200">
+                施設ID：{adminFacilityId}
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -538,6 +607,7 @@ export default function AdminPage() {
                 <thead>
                   <tr className="border-b bg-slate-100 text-left text-sm text-slate-700">
                     <th className="px-4 py-3">氏名</th>
+                    {adminRole === "superAdmin" && <th className="px-4 py-3">施設ID</th>}
                     <th className="px-4 py-3">所属</th>
                     <th className="px-4 py-3">年代</th>
                     <th className="px-4 py-3">職種</th>
@@ -560,6 +630,9 @@ export default function AdminPage() {
                         className="border-b text-sm text-slate-700 hover:bg-slate-50"
                       >
                         <td className="px-4 py-4 font-medium">{learner.name}</td>
+                        {adminRole === "superAdmin" && (
+                          <td className="px-4 py-4">{learner.facilityId || "未設定"}</td>
+                        )}
                         <td className="px-4 py-4">{learner.department}</td>
                         <td className="px-4 py-4">{learner.ageGroup}</td>
                         <td className="px-4 py-4">{learner.jobType}</td>
@@ -634,6 +707,7 @@ export default function AdminPage() {
                 <thead>
                   <tr className="border-b bg-slate-100 text-left text-sm text-slate-700">
                     <th className="px-4 py-3">氏名</th>
+                    {adminRole === "superAdmin" && <th className="px-4 py-3">施設ID</th>}
                     <th className="px-4 py-3">所属</th>
                     <th className="px-4 py-3">職種</th>
                     <th className="px-4 py-3">講義ID</th>
@@ -655,6 +729,9 @@ export default function AdminPage() {
                       className="border-b text-sm text-slate-700 hover:bg-slate-50"
                     >
                       <td className="px-4 py-4 font-medium">{log.learnerName}</td>
+                      {adminRole === "superAdmin" && (
+                        <td className="px-4 py-4">{log.facilityId || "未設定"}</td>
+                      )}
                       <td className="px-4 py-4">{log.department}</td>
                       <td className="px-4 py-4">{log.jobType}</td>
                       <td className="px-4 py-4">{log.lectureId}</td>

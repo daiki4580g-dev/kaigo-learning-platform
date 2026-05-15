@@ -74,8 +74,7 @@ export default function LoginPage() {
 
       setLoggedInUid(uid);
       setNeedsProfileSetup(true);
-    } catch (error) {
-      console.error(error);
+    } catch {
       setErrorMessage(
         "ログインに失敗しました。メールアドレスまたはパスワードをご確認ください。"
       );
@@ -132,9 +131,7 @@ export default function LoginPage() {
     return (
       <main className="min-h-screen bg-slate-50 flex items-center justify-center px-6 py-10">
         <div className="w-full max-w-md rounded-2xl bg-white border shadow-sm p-8">
-          <h1 className="text-3xl font-bold text-slate-900 mb-2">
-            初回登録
-          </h1>
+          <h1 className="text-3xl font-bold text-slate-900 mb-2">初回登録</h1>
 
           <p className="text-slate-600 mb-6">
             受講状況の管理に必要な情報を入力してください。
@@ -150,7 +147,7 @@ export default function LoginPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="例：山田 太郎"
-                className="w-full rounded-lg border px-3 py-2 outline-none focus:ring-2 focus:ring-slate-300"
+                className="w-full rounded-lg border px-3 py-2 text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-slate-300"
               />
             </div>
 
@@ -163,7 +160,7 @@ export default function LoginPage() {
                 value={department}
                 onChange={(e) => setDepartment(e.target.value)}
                 placeholder="例：介護部門、看護部門、リハビリ部門"
-                className="w-full rounded-lg border px-3 py-2 outline-none focus:ring-2 focus:ring-slate-300"
+                className="w-full rounded-lg border px-3 py-2 text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-slate-300"
               />
             </div>
 
@@ -174,7 +171,7 @@ export default function LoginPage() {
               <select
                 value={ageGroup}
                 onChange={(e) => setAgeGroup(e.target.value)}
-                className="w-full rounded-lg border px-3 py-2 outline-none focus:ring-2 focus:ring-slate-300 bg-white"
+                className="w-full rounded-lg border px-3 py-2 text-slate-900 outline-none focus:ring-2 focus:ring-slate-300 bg-white"
               >
                 <option value="">選択してください</option>
                 <option value="10代">10代</option>
@@ -193,7 +190,7 @@ export default function LoginPage() {
               <select
                 value={jobType}
                 onChange={(e) => setJobType(e.target.value)}
-                className="w-full rounded-lg border px-3 py-2 outline-none focus:ring-2 focus:ring-slate-300 bg-white"
+                className="w-full rounded-lg border px-3 py-2 text-slate-900 outline-none focus:ring-2 focus:ring-slate-300 bg-white"
               >
                 <option value="">選択してください</option>
                 <option value="介護職員">介護職員</option>
@@ -242,9 +239,12 @@ export default function LoginPage() {
             <input
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                if (errorMessage) setErrorMessage("");
+              }}
               placeholder="example@mail.com"
-              className="w-full rounded-lg border px-3 py-2 outline-none focus:ring-2 focus:ring-slate-300"
+              className="w-full rounded-lg border px-3 py-2 text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-slate-300"
             />
           </div>
 
@@ -256,9 +256,12 @@ export default function LoginPage() {
             <input
               type="password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                if (errorMessage) setErrorMessage("");
+              }}
               placeholder="パスワードを入力"
-              className="w-full rounded-lg border px-3 py-2 outline-none focus:ring-2 focus:ring-slate-300"
+              className="w-full rounded-lg border px-3 py-2 text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-slate-300"
             />
           </div>
 
