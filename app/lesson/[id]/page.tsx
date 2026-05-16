@@ -211,7 +211,9 @@ export default function LessonDetailPage() {
 
   useEffect(() => {
     const videoId = getYouTubeVideoId(lesson?.videoUrl);
+    const currentLesson = lesson;
     if (!videoId) return;
+    if (!currentLesson) return;
 
     const playerElementId = "youtube-lecture-player";
 
@@ -230,7 +232,7 @@ export default function LessonDetailPage() {
       "";
 
     const saveLectureProgress = async (options?: { force?: boolean }) => {
-      if (!id || !lesson) return;
+      if (!id || !currentLesson) return;
 
       const activeLearnerId = getActiveLearnerId();
       if (!activeLearnerId) return;
@@ -256,7 +258,7 @@ export default function LessonDetailPage() {
         doc(db, "users", activeLearnerId, "lectureLogs", String(id)),
         {
           lectureId: String(id),
-          title: lesson.title || `講義${id}`,
+          title: currentLesson.title || `講義${id}`,
           startedAt: (startedAt ?? now).toLocaleString("ja-JP"),
           endedAt: now.toLocaleString("ja-JP"),
           durationSeconds: currentWatchedSeconds,
@@ -357,7 +359,7 @@ export default function LessonDetailPage() {
                   doc(db, "users", activeLearnerId, "lectureLogs", String(id)),
                   {
                     lectureId: String(id),
-                    title: lesson.title || `講義${id}`,
+                    title: currentLesson.title || `講義${id}`,
                     startedAt: startTime.toLocaleString("ja-JP"),
                     startedAtTimestamp: serverTimestamp(),
                     updatedAt: serverTimestamp(),
