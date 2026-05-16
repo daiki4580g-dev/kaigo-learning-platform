@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { collection, doc, getDoc, getDocs, query, serverTimestamp, setDoc, where } from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth, db } from "@/lib/firebase";
 
 type Question = {
   id: string;
@@ -17,11 +18,93 @@ type Question = {
 type FirestoreTest = {
   title?: string;
   description?: string;
-  questions?: Question[];
+  questions?: Question[] | Record<string, Question>;
+  question?: string;
+  options?: string[];
+  choices?: string[];
+  correctIndex?: number;
+  [key: string]: unknown;
+};
+
+const normalizeQuestions = (data: FirestoreTest): Question[] => {
+  const normalizeQuestionItem = (
+    question: Partial<Question> & { choices?: string[] },
+    fallbackId: string,
+    fallbackIndex: number
+  ): Question => ({
+    id: typeof question.id === "string" ? question.id : fallbackId,
+    question:
+      typeof question.question === "string"
+        ? question.question
+        : `問題${fallbackIndex + 1}`,
+    options: Array.isArray(question.options)
+      ? question.options
+      : Array.isArray(question.choices)
+      ? question.choices
+      : [],
+    correctIndex:
+      typeof question.correctIndex === "number" ? question.correctIndex : 0,
+  });
+
+  const collectedQuestions: Question[] = [];
+
+  Object.entries(data).forEach(([fieldKey, fieldValue]) => {
+    if (!fieldKey.startsWith("questions")) return;
+
+    if (Array.isArray(fieldValue)) {
+      fieldValue.forEach((question, index) => {
+        collectedQuestions.push(
+          normalizeQuestionItem(
+            question as Partial<Question> & { choices?: string[] },
+            `${fieldKey}-${index + 1}`,
+            collectedQuestions.length
+          )
+        );
+      });
+      return;
+    }
+
+    if (fieldValue && typeof fieldValue === "object") {
+      Object.entries(fieldValue as Record<string, Partial<Question> & { choices?: string[] }>)
+        .sort(([a], [b]) => a.localeCompare(b, "ja", { numeric: true }))
+        .forEach(([key, question]) => {
+          collectedQuestions.push(
+            normalizeQuestionItem(
+              question,
+              key || `${fieldKey}-${collectedQuestions.length + 1}`,
+              collectedQuestions.length
+            )
+          );
+        });
+    }
+  });
+
+  if (collectedQuestions.length > 0) {
+    return collectedQuestions;
+  }
+
+  if (typeof data.question === "string") {
+    return [
+      {
+        id: "question-1",
+        question: data.question,
+        options: Array.isArray(data.options)
+          ? data.options
+          : Array.isArray(data.choices)
+          ? data.choices
+          : [],
+        correctIndex:
+          typeof data.correctIndex === "number" ? data.correctIndex : 0,
+      },
+    ];
+  }
+
+  return [];
 };
 
 export default function TestDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
 
   const [test, setTest] = useState<{
@@ -34,9 +117,30 @@ export default function TestDetailPage() {
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [submitted, setSubmitted] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [checkingAuth, setCheckingAuth] = useState(true);
+  const [learnerId, setLearnerId] = useState("");
 
   useEffect(() => {
-    const fetchTest = async () => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        router.push("/login");
+        return;
+      }
+
+      localStorage.setItem("uid", user.uid);
+      localStorage.setItem("learnerId", user.uid);
+      localStorage.setItem("userId", user.uid);
+      localStorage.setItem("userEmail", user.email || "");
+      setLearnerId(user.uid);
+      setCheckingAuth(false);
+    });
+
+    return () => unsubscribe();
+  }, [router]);
+
+useEffect(() => {
+  if (checkingAuth || !learnerId) return;
+  const fetchTest = async () => {
       if (!id) {
         setLoading(false);
         return;
@@ -46,51 +150,126 @@ export default function TestDetailPage() {
         const docRef = doc(db, "tests", id);
         const docSnap = await getDoc(docRef);
 
-        if (!docSnap.exists()) {
+        let data: FirestoreTest | null = null;
+
+        if (docSnap.exists()) {
+          data = docSnap.data() as FirestoreTest;
+        } else {
+          const numericId = Number(id);
+          const searchConditions = [
+            { field: "lectureId", value: String(id) },
+            { field: "lessonId", value: String(id) },
+            { field: "lectureId", value: Number.isNaN(numericId) ? String(id) : numericId },
+            { field: "lessonId", value: Number.isNaN(numericId) ? String(id) : numericId },
+            { field: "id", value: String(id) },
+            { field: "order", value: Number.isNaN(numericId) ? String(id) : numericId },
+          ];
+
+          for (const condition of searchConditions) {
+            const testQuery = query(
+              collection(db, "tests"),
+              where(condition.field, "==", condition.value)
+            );
+            const testSnapshot = await getDocs(testQuery);
+
+            if (!testSnapshot.empty) {
+              data = testSnapshot.docs[0].data() as FirestoreTest;
+              break;
+            }
+          }
+        }
+
+        if (!data) {
           setTest(null);
           return;
         }
 
-        const data = docSnap.data() as FirestoreTest;
+        const normalizedQuestions = normalizeQuestions(data);
+        let subCollectionQuestions: Question[] = [];
 
-        const normalizedQuestions = (data.questions ?? []).map(
-          (question, index) => ({
-            id:
-              typeof question.id === "string"
-                ? question.id
-                : `question-${index + 1}`,
-            question:
-              typeof question.question === "string"
-                ? question.question
-                : `問題${index + 1}`,
-            options: Array.isArray(question.options)
-              ? question.options
-              : Array.isArray(question.choices)
-              ? question.choices
-              : [],
-            correctIndex:
-              typeof question.correctIndex === "number"
-                ? question.correctIndex
-                : 0,
-          })
-        );
+        try {
+          const questionsSnapshot = await getDocs(
+            collection(db, "tests", id, "questions")
+          );
+
+          subCollectionQuestions = questionsSnapshot.docs
+            .map((questionDoc, index) => {
+              const questionData = questionDoc.data() as Partial<Question> & {
+                choices?: string[];
+              };
+
+              return {
+                id:
+                  typeof questionData.id === "string"
+                    ? questionData.id
+                    : questionDoc.id || `question-${index + 1}`,
+                question:
+                  typeof questionData.question === "string"
+                    ? questionData.question
+                    : `問題${index + 1}`,
+                options: Array.isArray(questionData.options)
+                  ? questionData.options
+                  : Array.isArray(questionData.choices)
+                  ? questionData.choices
+                  : [],
+                correctIndex:
+                  typeof questionData.correctIndex === "number"
+                    ? questionData.correctIndex
+                    : 0,
+              };
+            })
+            .sort((a, b) => a.id.localeCompare(b.id, "ja", { numeric: true }));
+        } catch {
+          subCollectionQuestions = [];
+        }
+
+        const allQuestions =
+          subCollectionQuestions.length > normalizedQuestions.length
+            ? subCollectionQuestions
+            : normalizedQuestions;
+
+        console.log("取得テスト", {
+          id,
+          data,
+          normalizedQuestions,
+          subCollectionQuestions,
+          allQuestions,
+        });
 
         setTest({
           title: data.title ?? "確認テスト",
           description:
             data.description ?? "動画の内容を確認するためのテストです。",
-          questions: normalizedQuestions,
+          questions: allQuestions,
         });
       } catch (error) {
-        console.error("テスト取得エラー", error);
-        setTest(null);
+        setTest({
+          title: "テスト読み込みエラー",
+          description:
+            error instanceof Error
+              ? error.message
+              : "テストデータの読み込みに失敗しました。",
+          questions: [],
+        });
       } finally {
         setLoading(false);
       }
     };
 
     fetchTest();
-  }, [id]);
+}, [id, checkingAuth, learnerId]);
+
+  if (checkingAuth) {
+    return (
+      <main className="min-h-screen bg-slate-50 px-6 py-10 flex items-center justify-center">
+        <div className="rounded-2xl bg-white border shadow-sm p-8 text-center">
+          <p className="text-slate-700 font-medium">
+            ログイン状態を確認しています...
+          </p>
+        </div>
+      </main>
+    );
+  }
 
   if (loading) {
     return (
@@ -156,19 +335,23 @@ export default function TestDetailPage() {
       test.questions.length > 0 &&
       nextScore / test.questions.length >= 0.8;
     const scorePercent = Math.round((nextScore / test.questions.length) * 100);
-    const learnerId =
+    const activeLearnerId =
+      learnerId ||
       window.localStorage.getItem("learnerId") ||
       window.localStorage.getItem("userId") ||
-      window.localStorage.getItem("studentId") ||
-      "kaigo010";
+      window.localStorage.getItem("uid") ||
+      "";
+
+    if (!activeLearnerId) {
+      setSubmitted(false);
+      setErrorMessage("ログイン情報を確認できませんでした。再ログインしてください。");
+      return;
+    }
 
     try {
       await setDoc(
-        doc(db, "users", learnerId),
+        doc(db, "users", activeLearnerId),
         {
-          name: learnerId,
-          department: "未設定",
-          progress: isNextPassed ? 100 : 80,
           testScore: scorePercent,
           status: isNextPassed ? "修了" : "テスト再受講",
           lastLecture: `講義${id}`,
@@ -179,7 +362,7 @@ export default function TestDetailPage() {
       );
 
       await setDoc(
-        doc(db, "users", learnerId, "testResults", String(id)),
+        doc(db, "users", activeLearnerId, "testResults", String(id)),
         {
           testId: String(id),
           title: test.title,
@@ -194,12 +377,15 @@ export default function TestDetailPage() {
       );
 
       await setDoc(
-        doc(db, "users", learnerId, "lectureLogs", String(id)),
+        doc(db, "users", activeLearnerId, "lectureLogs", String(id)),
         {
           lectureId: String(id),
+          title: test.title,
           testStarted: true,
           completed: isNextPassed,
           testScore: scorePercent,
+          testPassed: isNextPassed,
+          testCompletedAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         },
         { merge: true }
@@ -278,7 +464,7 @@ export default function TestDetailPage() {
                 return (
                   <label
                     key={`${item.id}-${optionIndex}`}
-                    className={`flex items-center gap-3 border rounded-xl p-3 cursor-pointer transition ${
+                    className={`flex items-center gap-3 border rounded-xl p-3 cursor-pointer transition text-slate-900 ${
                       showCorrect
                         ? "border-green-600 bg-green-50"
                         : showIncorrect
@@ -294,7 +480,7 @@ export default function TestDetailPage() {
                       checked={isSelected}
                       onChange={() => handleSelect(item.id, optionIndex)}
                     />
-                    <span>{option}</span>
+                    <span className="text-slate-900">{option}</span>
                   </label>
                 );
               })}

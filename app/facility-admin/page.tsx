@@ -4,7 +4,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { collection, getDocs } from "firebase/firestore";
+import { collection, getDocs, query, where } from "firebase/firestore";
 import { db } from "../../lib/firebase";
 
 type LectureLog = {
@@ -45,7 +45,6 @@ type Lesson = {
   courseName: string;
 };
 
-const DEFAULT_FACILITY_ID = "facility001";
 
 
 export default function FacilityAdminPage() {
@@ -54,22 +53,30 @@ export default function FacilityAdminPage() {
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [keyword, setKeyword] = useState("");
-  const [facilityId, setFacilityId] = useState(DEFAULT_FACILITY_ID);
-
-  useEffect(() => {
-    const storedFacilityId = window.localStorage.getItem("facilityId");
-    if (storedFacilityId) {
-      setFacilityId(storedFacilityId);
-    }
-  }, []);
+  const [facilityId, setFacilityId] = useState("");
 
   useEffect(() => {
     const fetchLearners = async () => {
+      const storedFacilityId = window.localStorage.getItem("facilityId");
+
+      if (!storedFacilityId) {
+        setErrorMessage("施設情報を確認できませんでした。再ログインしてください。");
+        setLoading(false);
+        return;
+      }
+
+      if (!facilityId) {
+        setFacilityId(storedFacilityId);
+        return;
+      }
+
       setLoading(true);
       setErrorMessage("");
 
       try {
-        const usersSnapshot = await getDocs(collection(db, "users"));
+        const usersSnapshot = await getDocs(
+          query(collection(db, "users"), where("facilityId", "==", facilityId))
+        );
 
         const lessonsSnapshot = await getDocs(collection(db, "lessons"));
         const fetchedLessons = lessonsSnapshot.docs
@@ -104,7 +111,7 @@ export default function FacilityAdminPage() {
           usersSnapshot.docs.map(async (userDoc) => {
             const data = userDoc.data();
             const userFacilityId =
-              typeof data.facilityId === "string" ? data.facilityId : DEFAULT_FACILITY_ID;
+              typeof data.facilityId === "string" ? data.facilityId : "";
 
             if (userFacilityId !== facilityId) return null;
 
@@ -265,10 +272,6 @@ export default function FacilityAdminPage() {
     };
   });
 
-  const handleFacilityIdChange = (value: string) => {
-    setFacilityId(value);
-    window.localStorage.setItem("facilityId", value);
-  };
 
 
   return (
@@ -326,22 +329,7 @@ export default function FacilityAdminPage() {
 
         <section className="rounded-2xl bg-white border shadow-sm p-6 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                施設ID
-              </label>
-              <input
-                value={facilityId}
-                onChange={(event) => handleFacilityIdChange(event.target.value)}
-                placeholder="例：facility001"
-                className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-300"
-              />
-              <p className="text-xs text-slate-500 mt-1">
-                本番ではログイン情報から自動判定する想定です。現在は確認用に入力できます。
-              </p>
-            </div>
-
-            <div>
+            <div className="md:col-span-2">
               <label className="block text-sm font-medium text-slate-700 mb-1">
                 検索
               </label>

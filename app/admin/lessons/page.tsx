@@ -15,6 +15,9 @@ type Lesson = {
   videoUrl: string;
   minutes: number;
   order: number;
+  unitTitle: string;
+  unitOrder: number;
+  lessonOrderInUnit: number;
   isPublished: boolean;
   courseName: string;
   category: string;
@@ -29,6 +32,9 @@ type LessonForm = {
   videoUrl: string;
   minutes: string;
   order: string;
+  unitTitle: string;
+  unitOrder: string;
+  lessonOrderInUnit: string;
   isPublished: boolean;
   courseName: string;
   category: string;
@@ -43,6 +49,9 @@ const emptyForm: LessonForm = {
   videoUrl: "",
   minutes: "5",
   order: "1",
+  unitTitle: "基礎理解",
+  unitOrder: "1",
+  lessonOrderInUnit: "1",
   isPublished: true,
   courseName: "腰痛・転倒予防研修",
   category: "腰痛予防",
@@ -76,6 +85,26 @@ export default function AdminLessonsPage() {
           videoUrl: typeof data.videoUrl === "string" ? data.videoUrl : "",
           minutes: typeof data.minutes === "number" ? data.minutes : 5,
           order: typeof data.order === "number" ? data.order : Number(lessonDoc.id) || 0,
+          unitTitle:
+            typeof data.unitTitle === "string"
+              ? data.unitTitle
+              : typeof data.chapter === "string"
+              ? data.chapter
+              : "未設定",
+          unitOrder:
+            typeof data.unitOrder === "number"
+              ? data.unitOrder
+              : typeof data.unit === "number"
+              ? data.unit
+              : 1,
+          lessonOrderInUnit:
+            typeof data.lessonOrderInUnit === "number"
+              ? data.lessonOrderInUnit
+              : typeof data.orderInUnit === "number"
+              ? data.orderInUnit
+              : typeof data.order === "number"
+              ? data.order
+              : Number(lessonDoc.id) || 1,
           isPublished: typeof data.isPublished === "boolean" ? data.isPublished : true,
           courseName:
             typeof data.courseName === "string"
@@ -132,6 +161,9 @@ export default function AdminLessonsPage() {
       videoUrl: lesson.videoUrl ?? "",
       minutes: String(lesson.minutes ?? 5),
       order: String(lesson.order ?? 1),
+      unitTitle: lesson.unitTitle ?? "基礎理解",
+      unitOrder: String(lesson.unitOrder ?? 1),
+      lessonOrderInUnit: String(lesson.lessonOrderInUnit ?? 1),
       isPublished: lesson.isPublished ?? true,
       courseName: lesson.courseName ?? "腰痛・転倒予防研修",
       category: lesson.category ?? "腰痛予防",
@@ -169,6 +201,8 @@ export default function AdminLessonsPage() {
 
     const minutes = Number(form.minutes);
     const order = Number(form.order);
+    const unitOrder = Number(form.unitOrder);
+    const lessonOrderInUnit = Number(form.lessonOrderInUnit);
 
     if (Number.isNaN(minutes) || minutes <= 0) {
       setMessage("講義時間は1以上の数字で入力してください。");
@@ -177,6 +211,21 @@ export default function AdminLessonsPage() {
 
     if (Number.isNaN(order) || order <= 0) {
       setMessage("表示順は1以上の数字で入力してください。");
+      return;
+    }
+
+    if (!form.unitTitle.trim()) {
+      setMessage("単元名を入力してください。");
+      return;
+    }
+
+    if (Number.isNaN(unitOrder) || unitOrder <= 0) {
+      setMessage("単元順は1以上の数字で入力してください。");
+      return;
+    }
+
+    if (Number.isNaN(lessonOrderInUnit) || lessonOrderInUnit <= 0) {
+      setMessage("単元内の講義順は1以上の数字で入力してください。");
       return;
     }
 
@@ -192,6 +241,9 @@ export default function AdminLessonsPage() {
           videoUrl: form.videoUrl.trim(),
           minutes,
           order,
+          unitTitle: form.unitTitle.trim(),
+          unitOrder,
+          lessonOrderInUnit,
           isPublished: form.isPublished,
           courseName: form.courseName.trim(),
           category: form.category.trim(),
@@ -260,6 +312,10 @@ export default function AdminLessonsPage() {
               <span className="font-medium">講義タイプ：</span>
               通常講義／法定研修／確認テスト／オリエンテーション
             </p>
+            <p>
+              <span className="font-medium">単元名：</span>
+              基礎理解／リスク理解／実践編 ／ 単元順：1、2、3 ／ 単元内の講義順：1、2、3
+            </p>
             <p className="text-xs text-slate-500">
               例：法定研修を追加する場合は、コース名に「感染症対策研修」、カテゴリに「感染対策」、講義タイプに「法定研修」を設定します。
             </p>
@@ -294,6 +350,48 @@ export default function AdminLessonsPage() {
               <input
                 value={form.order ?? ""}
                 onChange={(event) => setForm((prev) => ({ ...prev, order: event.target.value }))}
+                placeholder="例：1"
+                className="w-full rounded-lg border border-slate-300 px-4 py-2 outline-none focus:ring-2 focus:ring-slate-300"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                単元名
+              </label>
+              <input
+                value={form.unitTitle ?? ""}
+                onChange={(event) =>
+                  setForm((prev) => ({ ...prev, unitTitle: event.target.value }))
+                }
+                placeholder="例：基礎理解"
+                className="w-full rounded-lg border border-slate-300 px-4 py-2 outline-none focus:ring-2 focus:ring-slate-300"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                単元順
+              </label>
+              <input
+                value={form.unitOrder ?? ""}
+                onChange={(event) =>
+                  setForm((prev) => ({ ...prev, unitOrder: event.target.value }))
+                }
+                placeholder="例：1"
+                className="w-full rounded-lg border border-slate-300 px-4 py-2 outline-none focus:ring-2 focus:ring-slate-300"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                単元内の講義順
+              </label>
+              <input
+                value={form.lessonOrderInUnit ?? ""}
+                onChange={(event) =>
+                  setForm((prev) => ({ ...prev, lessonOrderInUnit: event.target.value }))
+                }
                 placeholder="例：1"
                 className="w-full rounded-lg border border-slate-300 px-4 py-2 outline-none focus:ring-2 focus:ring-slate-300"
               />
@@ -476,6 +574,9 @@ export default function AdminLessonsPage() {
                   <tr className="border-b bg-slate-100 text-left text-sm text-slate-700">
                     <th className="px-4 py-3">ID</th>
                     <th className="px-4 py-3">順番</th>
+                    <th className="px-4 py-3">単元</th>
+                    <th className="px-4 py-3">単元順</th>
+                    <th className="px-4 py-3">単元内順</th>
                     <th className="px-4 py-3">タイトル</th>
                     <th className="px-4 py-3">コース</th>
                     <th className="px-4 py-3">カテゴリ</th>
@@ -495,6 +596,9 @@ export default function AdminLessonsPage() {
                     >
                       <td className="px-4 py-4 font-medium">{lesson.id}</td>
                       <td className="px-4 py-4">{lesson.order}</td>
+                      <td className="px-4 py-4">{lesson.unitTitle}</td>
+                      <td className="px-4 py-4">{lesson.unitOrder}</td>
+                      <td className="px-4 py-4">{lesson.lessonOrderInUnit}</td>
                       <td className="px-4 py-4 min-w-64">
                         <p className="font-medium text-slate-900">{lesson.title}</p>
                         {lesson.description && (

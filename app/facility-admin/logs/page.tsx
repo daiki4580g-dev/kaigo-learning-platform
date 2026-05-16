@@ -1,10 +1,8 @@
-
-
 "use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { collection, getDocs } from "firebase/firestore";
+import { collection, getDocs, query, where } from "firebase/firestore";
 import { db } from "../../../lib/firebase";
 
 type LectureLogRow = {
@@ -22,8 +20,6 @@ type LectureLogRow = {
   testStarted: boolean;
   completed: boolean;
 };
-
-const DEFAULT_FACILITY_ID = "facility001";
 
 const formatWatchTime = (seconds: number) => {
   if (!seconds || seconds <= 0) return "0秒";
@@ -53,22 +49,30 @@ export default function FacilityLogsPage() {
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [keyword, setKeyword] = useState("");
-  const [facilityId, setFacilityId] = useState(DEFAULT_FACILITY_ID);
-
-  useEffect(() => {
-    const storedFacilityId = window.localStorage.getItem("facilityId");
-    if (storedFacilityId) {
-      setFacilityId(storedFacilityId);
-    }
-  }, []);
+  const [facilityId, setFacilityId] = useState("");
 
   useEffect(() => {
     const fetchLogs = async () => {
+      const storedFacilityId = window.localStorage.getItem("facilityId");
+
+      if (!storedFacilityId) {
+        setErrorMessage("施設情報を確認できませんでした。管理者ログインから再ログインしてください。");
+        setLoading(false);
+        return;
+      }
+
+      if (!facilityId) {
+        setFacilityId(storedFacilityId);
+        return;
+      }
+
       setLoading(true);
       setErrorMessage("");
 
       try {
-        const usersSnapshot = await getDocs(collection(db, "users"));
+        const usersSnapshot = await getDocs(
+          query(collection(db, "users"), where("facilityId", "==", facilityId))
+        );
 
         const allLogs: LectureLogRow[] = [];
 
@@ -76,9 +80,7 @@ export default function FacilityLogsPage() {
           const userData = userDoc.data();
 
           const userFacilityId =
-            typeof userData.facilityId === "string"
-              ? userData.facilityId
-              : DEFAULT_FACILITY_ID;
+            typeof userData.facilityId === "string" ? userData.facilityId : "";
 
           if (userFacilityId !== facilityId) continue;
 
@@ -279,28 +281,7 @@ export default function FacilityLogsPage() {
 
         <section className="rounded-2xl bg-white border shadow-sm p-6 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                施設ID
-              </label>
-              <input
-                value={facilityId}
-                onChange={(event) => {
-                  setFacilityId(event.target.value);
-                  window.localStorage.setItem(
-                    "facilityId",
-                    event.target.value
-                  );
-                }}
-                placeholder="例：facility001"
-                className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-300"
-              />
-              <p className="text-xs text-slate-500 mt-1">
-                現在の表示施設：{facilityName}
-              </p>
-            </div>
-
-            <div>
+            <div className="md:col-span-2">
               <label className="block text-sm font-medium text-slate-700 mb-1">
                 検索
               </label>
@@ -318,7 +299,7 @@ export default function FacilityLogsPage() {
           <div>
             <h2 className="text-2xl font-bold text-slate-900">視聴ログ一覧</h2>
             <p className="text-sm text-slate-500 mt-1">
-              助成金提出に利用しやすい形式で表示しています。
+              対象施設：{facilityName} ／ 助成金提出に利用しやすい形式で表示しています。
             </p>
           </div>
 

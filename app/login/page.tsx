@@ -19,6 +19,7 @@ export default function LoginPage() {
   const [department, setDepartment] = useState("");
   const [ageGroup, setAgeGroup] = useState("");
   const [jobType, setJobType] = useState("");
+  const [facilityId, setFacilityId] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
 
   const handleLogin = async () => {
@@ -62,14 +63,28 @@ export default function LoginPage() {
           setJobType(userData.jobType);
         }
 
+        if (userData.facilityId) {
+          localStorage.setItem("facilityId", userData.facilityId);
+          setFacilityId(userData.facilityId);
+        }
+
         if (userData.role) {
           localStorage.setItem("userRole", userData.role);
+        } else {
+          localStorage.setItem("userRole", "learner");
         }
 
         if (userData.profileCompleted) {
-          router.push("/lesson");
+          router.push("/mypage");
           return;
         }
+      }
+
+      if (!userDoc.exists()) {
+        setErrorMessage(
+          "受講者情報が登録されていません。管理者に確認してください。"
+        );
+        return;
       }
 
       setLoggedInUid(uid);
@@ -117,8 +132,12 @@ export default function LoginPage() {
       localStorage.setItem("department", department);
       localStorage.setItem("ageGroup", ageGroup);
       localStorage.setItem("jobType", jobType);
+      localStorage.setItem("userRole", "learner");
+      if (facilityId) {
+        localStorage.setItem("facilityId", facilityId);
+      }
 
-      router.push("/lesson");
+      router.push("/mypage");
     } catch (error) {
       console.error(error);
       setErrorMessage("登録に失敗しました。時間をおいて再度お試しください。");
@@ -134,7 +153,7 @@ export default function LoginPage() {
           <h1 className="text-3xl font-bold text-slate-900 mb-2">初回登録</h1>
 
           <p className="text-slate-600 mb-6">
-            受講状況の管理に必要な情報を入力してください。
+            受講状況の管理に必要な基本情報を入力してください。
           </p>
 
           <div className="space-y-4">

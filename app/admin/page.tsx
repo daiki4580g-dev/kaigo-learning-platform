@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { collection, doc, getDoc, getDocs, query, orderBy, limit } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, query, orderBy, limit, serverTimestamp, setDoc } from "firebase/firestore";
 import { auth, db } from "../../lib/firebase";
 
 type LectureLog = {
@@ -39,6 +39,15 @@ type Learner = {
   testStartedCount?: number;
   totalWatchSeconds?: number;
   lectureLogs?: LectureLog[];
+};
+
+type Facility = {
+  id: string;
+  name: string;
+  representativeName: string;
+  contactEmail: string;
+  isActive: boolean;
+  updatedAt: string;
 };
 
 const getProgressText = (progress?: number) => {
@@ -99,6 +108,25 @@ export default function AdminPage() {
   const [keyword, setKeyword] = useState("");
   const [adminRole, setAdminRole] = useState("");
   const [adminFacilityId, setAdminFacilityId] = useState("");
+  const [newLearnerUid, setNewLearnerUid] = useState("");
+  const [newLearnerEmail, setNewLearnerEmail] = useState("");
+  const [newLearnerFacilityId, setNewLearnerFacilityId] = useState("");
+  const [registeringLearner, setRegisteringLearner] = useState(false);
+  const [registerMessage, setRegisterMessage] = useState("");
+  const [noticeTitle, setNoticeTitle] = useState("今月の研修テーマ：褥瘡に関する研修");
+  const [noticeBody, setNoticeBody] = useState("今月は、介護現場で重要となる褥瘡予防について学びます。日々の観察、体位変換、皮膚状態の確認など、現場で活かせる内容を順次追加予定です。");
+  const [noticeTheme, setNoticeTheme] = useState("褥瘡予防");
+  const [noticeScope, setNoticeScope] = useState("global");
+  const [noticeFacilityId, setNoticeFacilityId] = useState("");
+  const [savingNotice, setSavingNotice] = useState(false);
+  const [noticeMessage, setNoticeMessage] = useState("");
+  const [facilities, setFacilities] = useState<Facility[]>([]);
+  const [newFacilityId, setNewFacilityId] = useState("");
+  const [newFacilityName, setNewFacilityName] = useState("");
+  const [newFacilityRepresentativeName, setNewFacilityRepresentativeName] = useState("");
+  const [newFacilityContactEmail, setNewFacilityContactEmail] = useState("");
+  const [savingFacility, setSavingFacility] = useState(false);
+  const [facilityMessage, setFacilityMessage] = useState("");
 
   useEffect(() => {
     const uid = localStorage.getItem("uid");
@@ -107,6 +135,34 @@ export default function AdminPage() {
       router.push("/login");
       return;
     }
+
+    const fetchFacilities = async () => {
+      try {
+        const facilitiesQuery = query(collection(db, "facilities"), orderBy("id", "asc"));
+        const snapshot = await getDocs(facilitiesQuery);
+
+        const fetchedFacilities = snapshot.docs.map((facilityDoc) => {
+          const data = facilityDoc.data();
+
+          return {
+            id: facilityDoc.id,
+            name: typeof data.name === "string" ? data.name : facilityDoc.id,
+            representativeName:
+              typeof data.representativeName === "string"
+                ? data.representativeName
+                : "未設定",
+            contactEmail:
+              typeof data.contactEmail === "string" ? data.contactEmail : "未設定",
+            isActive: data.isActive !== false,
+            updatedAt: typeof data.updatedAt === "string" ? data.updatedAt : "未記録",
+          };
+        });
+
+        setFacilities(fetchedFacilities);
+      } catch (error) {
+        console.error("施設一覧取得エラー", error);
+      }
+    };
 
     const fetchLearners = async () => {
       try {
@@ -282,6 +338,9 @@ export default function AdminPage() {
           (learner): learner is Learner => learner !== null
         );
         setLearners(visibleLearners);
+        if (role === "superAdmin") {
+          await fetchFacilities();
+        }
       } catch (error) {
         console.error("受講者取得エラー", error);
         setErrorMessage(
@@ -296,6 +355,221 @@ export default function AdminPage() {
 
     fetchLearners();
   }, [router]);
+
+  const fetchFacilities = async () => {
+    try {
+      const facilitiesQuery = query(collection(db, "facilities"), orderBy("id", "asc"));
+      const snapshot = await getDocs(facilitiesQuery);
+
+      const fetchedFacilities = snapshot.docs.map((facilityDoc) => {
+        const data = facilityDoc.data();
+
+        return {
+          id: facilityDoc.id,
+          name: typeof data.name === "string" ? data.name : facilityDoc.id,
+          representativeName:
+            typeof data.representativeName === "string"
+              ? data.representativeName
+              : "未設定",
+          contactEmail:
+            typeof data.contactEmail === "string" ? data.contactEmail : "未設定",
+          isActive: data.isActive !== false,
+          updatedAt: typeof data.updatedAt === "string" ? data.updatedAt : "未記録",
+        };
+      });
+
+      setFacilities(fetchedFacilities);
+    } catch (error) {
+      console.error("施設一覧取得エラー", error);
+    }
+  };
+
+  const handleSaveFacility = async () => {
+    setFacilityMessage("");
+
+    if (adminRole !== "superAdmin") {
+      setFacilityMessage("施設管理は運営管理者のみ実行できます。");
+      return;
+    }
+
+    if (!newFacilityId.trim() || !newFacilityName.trim()) {
+      setFacilityMessage("施設IDと施設名を入力してください。");
+      return;
+    }
+
+    try {
+      setSavingFacility(true);
+
+      const facilityId = newFacilityId.trim();
+
+      await setDoc(
+        doc(db, "facilities", facilityId),
+        {
+          id: facilityId,
+          name: newFacilityName.trim(),
+          representativeName: newFacilityRepresentativeName.trim(),
+          contactEmail: newFacilityContactEmail.trim(),
+          isActive: true,
+          createdAt: serverTimestamp(),
+          updatedAt: new Date().toLocaleString("ja-JP"),
+          updatedAtTimestamp: serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      setFacilityMessage("施設情報を保存しました。");
+      setNewFacilityId("");
+      setNewFacilityName("");
+      setNewFacilityRepresentativeName("");
+      setNewFacilityContactEmail("");
+      await fetchFacilities();
+    } catch (error) {
+      console.error("施設保存エラー", error);
+      setFacilityMessage(
+        `施設情報の保存に失敗しました。Firestore Rules を確認してください。詳細: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    } finally {
+      setSavingFacility(false);
+    }
+  };
+
+  const handleSaveAnnouncement = async () => {
+    setNoticeMessage("");
+
+    if (!noticeTitle.trim() || !noticeBody.trim()) {
+      setNoticeMessage("お知らせのタイトルと本文を入力してください。");
+      return;
+    }
+
+    const isGlobalNotice = noticeScope === "global";
+    const targetFacilityId = isGlobalNotice
+      ? ""
+      : adminRole === "facilityAdmin"
+      ? adminFacilityId
+      : noticeFacilityId.trim();
+
+    if (!isGlobalNotice && !targetFacilityId) {
+      setNoticeMessage("施設向けのお知らせには施設IDを入力してください。");
+      return;
+    }
+
+    if (adminRole === "facilityAdmin" && isGlobalNotice) {
+      setNoticeMessage("施設管理者は施設向けのお知らせのみ登録できます。");
+      return;
+    }
+
+    try {
+      setSavingNotice(true);
+
+      const announcementId = isGlobalNotice
+        ? `global-${Date.now()}`
+        : `facility-${targetFacilityId}-${Date.now()}`;
+
+      await setDoc(doc(db, "announcements", announcementId), {
+        title: noticeTitle.trim(),
+        body: noticeBody.trim(),
+        theme: noticeTheme.trim(),
+        scope: isGlobalNotice ? "global" : "facility",
+        facilityId: targetFacilityId,
+        senderType: isGlobalNotice ? "workwell" : "facility",
+        senderName: isGlobalNotice ? "WorkWell Consulting" : "施設代表者",
+        isPublished: true,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      setNoticeMessage("お知らせを保存しました。");
+      setNoticeTitle("");
+      setNoticeBody("");
+      setNoticeTheme("");
+      if (adminRole === "superAdmin") {
+        setNoticeFacilityId("");
+      }
+    } catch (error) {
+      console.error("お知らせ保存エラー", error);
+      setNoticeMessage(
+        `お知らせの保存に失敗しました。Firestore Rules を確認してください。詳細: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    } finally {
+      setSavingNotice(false);
+    }
+  };
+
+  const handleRegisterLearnerProfile = async () => {
+    setRegisterMessage("");
+
+    if (adminRole !== "superAdmin") {
+      setRegisterMessage("受講者登録は運営管理者のみ実行できます。");
+      return;
+    }
+
+    if (!newLearnerUid || !newLearnerEmail || !newLearnerFacilityId) {
+      setRegisterMessage("UID、メール、施設IDを入力してください。");
+      return;
+    }
+
+    try {
+      setRegisteringLearner(true);
+
+      await setDoc(
+        doc(db, "users", newLearnerUid.trim()),
+        {
+          email: newLearnerEmail.trim(),
+          facilityId: newLearnerFacilityId.trim(),
+          role: "learner",
+          profileCompleted: false,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      setLearners((current) => {
+        const newLearner: Learner = {
+          id: newLearnerUid.trim(),
+          name: newLearnerEmail.trim(),
+          facilityId: newLearnerFacilityId.trim(),
+          department: "初回登録待ち",
+          ageGroup: "初回登録待ち",
+          jobType: "初回登録待ち",
+          profileCompleted: false,
+          progress: 0,
+          lectureCount: 0,
+          completedLectureCount: 0,
+          testStartedCount: 0,
+          totalWatchSeconds: 0,
+          lectureLogs: [],
+        };
+
+        const exists = current.some((learner) => learner.id === newLearner.id);
+        if (exists) {
+          return current.map((learner) =>
+            learner.id === newLearner.id ? { ...learner, ...newLearner } : learner
+          );
+        }
+
+        return [newLearner, ...current];
+      });
+
+      setNewLearnerUid("");
+      setNewLearnerEmail("");
+      setNewLearnerFacilityId("");
+      setRegisterMessage("受講者を登録しました。氏名・所属・年代・職種は受講者の初回ログイン時に入力されます。");
+    } catch (error) {
+      console.error("受講者登録エラー", error);
+      setRegisterMessage(
+        `受講者登録に失敗しました。Firestore Rules を確認してください。詳細: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    } finally {
+      setRegisteringLearner(false);
+    }
+  };
 
   const filteredLearners = useMemo(() => {
     const trimmedKeyword = keyword.trim().toLowerCase();
@@ -531,6 +805,293 @@ export default function AdminPage() {
             </p>
           </Link>
         </div>
+
+        {adminRole === "superAdmin" && (
+          <section className="rounded-2xl bg-white border shadow-sm p-6 space-y-5">
+            <div>
+              <h2 className="text-2xl font-bold text-slate-900">施設管理</h2>
+              <p className="text-sm text-slate-500 mt-1 leading-6">
+                施設ID、施設名、代表者情報を管理します。受講者や施設代表者には、ここで登録した施設IDを紐づけます。
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  施設ID
+                </label>
+                <input
+                  value={newFacilityId}
+                  onChange={(event) => setNewFacilityId(event.target.value)}
+                  placeholder="例：facility001"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-slate-300"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  施設名
+                </label>
+                <input
+                  value={newFacilityName}
+                  onChange={(event) => setNewFacilityName(event.target.value)}
+                  placeholder="例：〇〇介護施設"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-slate-300"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  施設代表者名
+                </label>
+                <input
+                  value={newFacilityRepresentativeName}
+                  onChange={(event) => setNewFacilityRepresentativeName(event.target.value)}
+                  placeholder="例：山田 太郎"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-slate-300"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  連絡先メール
+                </label>
+                <input
+                  value={newFacilityContactEmail}
+                  onChange={(event) => setNewFacilityContactEmail(event.target.value)}
+                  placeholder="facility@example.com"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-slate-300"
+                />
+              </div>
+            </div>
+
+            {facilityMessage && (
+              <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 text-sm text-slate-700">
+                {facilityMessage}
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={handleSaveFacility}
+              disabled={savingFacility}
+              className="inline-flex items-center justify-center rounded-lg bg-slate-900 text-white px-5 py-2.5 text-sm font-medium hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 transition"
+            >
+              {savingFacility ? "保存中..." : "施設情報を保存"}
+            </button>
+
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[800px] border-collapse">
+                <thead>
+                  <tr className="border-b bg-slate-100 text-left text-sm text-slate-700">
+                    <th className="px-4 py-3">施設ID</th>
+                    <th className="px-4 py-3">施設名</th>
+                    <th className="px-4 py-3">代表者</th>
+                    <th className="px-4 py-3">連絡先</th>
+                    <th className="px-4 py-3">状態</th>
+                    <th className="px-4 py-3">更新日</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {facilities.length === 0 ? (
+                    <tr>
+                      <td className="px-4 py-4 text-sm text-slate-500" colSpan={6}>
+                        登録済みの施設はまだありません。
+                      </td>
+                    </tr>
+                  ) : (
+                    facilities.map((facility) => (
+                      <tr key={facility.id} className="border-b text-sm text-slate-700 hover:bg-slate-50">
+                        <td className="px-4 py-4 font-medium">{facility.id}</td>
+                        <td className="px-4 py-4">{facility.name}</td>
+                        <td className="px-4 py-4">{facility.representativeName}</td>
+                        <td className="px-4 py-4">{facility.contactEmail}</td>
+                        <td className="px-4 py-4">
+                          <span className="inline-flex rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-700">
+                            {facility.isActive ? "有効" : "停止"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4">{facility.updatedAt}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+
+        <section className="rounded-2xl bg-white border shadow-sm p-6 space-y-5">
+          <div>
+            <h2 className="text-2xl font-bold text-slate-900">お知らせ登録</h2>
+            <p className="text-sm text-slate-500 mt-1 leading-6">
+              受講者のマイページに表示するお知らせを登録します。WorkWell Consultingからのお知らせ、または施設代表者からのお知らせとして表示されます。
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="lg:col-span-2">
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                タイトル
+              </label>
+              <input
+                value={noticeTitle}
+                onChange={(event) => setNoticeTitle(event.target.value)}
+                placeholder="例：今月の研修テーマ：褥瘡に関する研修"
+                className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-slate-300"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                今月の重点
+              </label>
+              <input
+                value={noticeTheme}
+                onChange={(event) => setNoticeTheme(event.target.value)}
+                placeholder="例：褥瘡予防"
+                className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-slate-300"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                発信範囲
+              </label>
+              <select
+                value={noticeScope}
+                onChange={(event) => setNoticeScope(event.target.value)}
+                disabled={adminRole === "facilityAdmin"}
+                className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-slate-300 disabled:bg-slate-100"
+              >
+                {adminRole === "superAdmin" && (
+                  <option value="global">WorkWell Consultingからのお知らせ</option>
+                )}
+                <option value="facility">施設代表者からのお知らせ</option>
+              </select>
+            </div>
+
+            {noticeScope === "facility" && adminRole === "superAdmin" && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  施設ID
+                </label>
+                <input
+                  value={noticeFacilityId}
+                  onChange={(event) => setNoticeFacilityId(event.target.value)}
+                  placeholder="例：facility001"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-slate-300"
+                />
+              </div>
+            )}
+
+            {noticeScope === "facility" && adminRole === "facilityAdmin" && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  施設ID
+                </label>
+                <input
+                  value={adminFacilityId}
+                  readOnly
+                  className="w-full rounded-lg border border-slate-300 bg-slate-100 px-4 py-2 text-sm text-slate-700 outline-none"
+                />
+              </div>
+            )}
+
+            <div className="md:col-span-2 lg:col-span-4">
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                本文
+              </label>
+              <textarea
+                value={noticeBody}
+                onChange={(event) => setNoticeBody(event.target.value)}
+                rows={4}
+                placeholder="お知らせ本文を入力してください。"
+                className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-slate-300"
+              />
+            </div>
+          </div>
+
+          {noticeMessage && (
+            <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 text-sm text-slate-700">
+              {noticeMessage}
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={handleSaveAnnouncement}
+            disabled={savingNotice}
+            className="inline-flex items-center justify-center rounded-lg bg-slate-900 text-white px-5 py-2.5 text-sm font-medium hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 transition"
+          >
+            {savingNotice ? "保存中..." : "お知らせを保存"}
+          </button>
+        </section>
+
+        {adminRole === "superAdmin" && (
+          <section className="rounded-2xl bg-white border shadow-sm p-6 space-y-5">
+            <div>
+              <h2 className="text-2xl font-bold text-slate-900">受講者登録</h2>
+              <p className="text-sm text-slate-500 mt-1 leading-6">
+                Firebase Authentication で作成した受講者の UID・メールアドレス・施設IDを登録します。
+                氏名・所属・年代・職種は、受講者が初回ログイン時に入力します。
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="lg:col-span-2">
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Authentication UID
+                </label>
+                <input
+                  value={newLearnerUid}
+                  onChange={(event) => setNewLearnerUid(event.target.value)}
+                  placeholder="Firebase Authentication の UID"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-slate-300"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  メールアドレス
+                </label>
+                <input
+                  value={newLearnerEmail}
+                  onChange={(event) => setNewLearnerEmail(event.target.value)}
+                  placeholder="learner@example.com"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-slate-300"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  施設ID
+                </label>
+                <input
+                  value={newLearnerFacilityId}
+                  onChange={(event) => setNewLearnerFacilityId(event.target.value)}
+                  placeholder="例：facility001"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-slate-300"
+                />
+              </div>
+            </div>
+
+            {registerMessage && (
+              <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 text-sm text-slate-700">
+                {registerMessage}
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={handleRegisterLearnerProfile}
+              disabled={registeringLearner}
+              className="inline-flex items-center justify-center rounded-lg bg-slate-900 text-white px-5 py-2.5 text-sm font-medium hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 transition"
+            >
+              {registeringLearner ? "登録中..." : "受講者を登録"}
+            </button>
+          </section>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="rounded-2xl bg-white border shadow-sm p-6">

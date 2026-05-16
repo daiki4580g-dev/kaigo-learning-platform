@@ -21,8 +21,11 @@ type Lesson = {
 type YouTubePlayer = {
   playVideo: () => void;
   pauseVideo: () => void;
+  seekTo: (seconds: number, allowSeekAhead: boolean) => void;
   getCurrentTime: () => number;
   getDuration: () => number;
+  getPlaybackRate: () => number;
+  setPlaybackRate: (suggestedRate: number) => void;
   destroy: () => void;
 };
 
@@ -83,6 +86,10 @@ export default function LessonDetailPage() {
   const playerRef = useRef<YouTubePlayer | null>(null);
   const watchIntervalRef = useRef<number | null>(null);
   const hasSavedStartLogRef = useRef(false);
+  const watchedSecondsRef = useRef(0);
+  const videoDurationSecondsRef = useRef(0);
+  const lastProgressSaveAtRef = useRef(0);
+  const allowedSeekBufferSeconds = 3;
 
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [loading, setLoading] = useState(true);
@@ -92,6 +99,7 @@ export default function LessonDetailPage() {
   const [videoDurationSeconds, setVideoDurationSeconds] = useState(0);
   const [canStartTest, setCanStartTest] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const [learnerId, setLearnerId] = useState("");
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (!user) {
@@ -103,6 +111,7 @@ export default function LessonDetailPage() {
       localStorage.setItem("learnerId", user.uid);
       localStorage.setItem("userId", user.uid);
       localStorage.setItem("userEmail", user.email || "");
+      setLearnerId(user.uid);
 
       setCheckingAuth(false);
     });
@@ -147,7 +156,58 @@ export default function LessonDetailPage() {
     setVideoDurationSeconds(0);
     setCanStartTest(false);
     hasSavedStartLogRef.current = false;
+    watchedSecondsRef.current = 0;
+    videoDurationSecondsRef.current = 0;
+    lastProgressSaveAtRef.current = 0;
   }, [id, lesson]);
+
+  useEffect(() => {
+    const fetchExistingLectureLog = async () => {
+      if (!id || !learnerId || !lesson) return;
+
+      try {
+        const logRef = doc(db, "users", learnerId, "lectureLogs", String(id));
+        const logSnap = await getDoc(logRef);
+
+        if (!logSnap.exists()) return;
+
+        const logData = logSnap.data();
+        const existingWatchedSeconds =
+          typeof logData.watchedSeconds === "number"
+            ? logData.watchedSeconds
+            : 0;
+        const existingVideoDurationSeconds =
+          typeof logData.videoDurationSeconds === "number"
+            ? logData.videoDurationSeconds
+            : 0;
+        const existingWatchProgress =
+          typeof logData.watchProgress === "number"
+            ? logData.watchProgress
+            : existingVideoDurationSeconds > 0
+            ? Math.round((existingWatchedSeconds / existingVideoDurationSeconds) * 100)
+            : 0;
+        const existingTestStarted = logData.testStarted === true;
+
+        if (existingVideoDurationSeconds > 0) {
+          videoDurationSecondsRef.current = existingVideoDurationSeconds;
+          setVideoDurationSeconds(existingVideoDurationSeconds);
+        }
+
+        if (existingWatchedSeconds > 0) {
+          watchedSecondsRef.current = existingWatchedSeconds;
+          setWatchedSeconds(existingWatchedSeconds);
+        }
+
+        if (existingWatchProgress >= 90 || existingTestStarted) {
+          setCanStartTest(true);
+        }
+      } catch (error) {
+        console.error("既存視聴ログ取得エラー", error);
+      }
+    };
+
+    fetchExistingLectureLog();
+  }, [id, learnerId, lesson]);
 
   useEffect(() => {
     const videoId = getYouTubeVideoId(lesson?.videoUrl);
@@ -162,6 +222,53 @@ export default function LessonDetailPage() {
       }
     };
 
+    const getActiveLearnerId = () =>
+      learnerId ||
+      window.localStorage.getItem("learnerId") ||
+      window.localStorage.getItem("userId") ||
+      window.localStorage.getItem("uid") ||
+      "";
+
+    const saveLectureProgress = async (options?: { force?: boolean }) => {
+      if (!id || !lesson) return;
+
+      const activeLearnerId = getActiveLearnerId();
+      if (!activeLearnerId) return;
+
+      const now = new Date();
+      const currentWatchedSeconds = watchedSecondsRef.current;
+      const currentVideoDurationSeconds = videoDurationSecondsRef.current;
+      const currentWatchProgress =
+        currentVideoDurationSeconds > 0
+          ? Math.min(
+              Math.round((currentWatchedSeconds / currentVideoDurationSeconds) * 100),
+              100
+            )
+          : 0;
+
+      if (!options?.force && currentWatchedSeconds - lastProgressSaveAtRef.current < 5) {
+        return;
+      }
+
+      lastProgressSaveAtRef.current = currentWatchedSeconds;
+
+      await setDoc(
+        doc(db, "users", activeLearnerId, "lectureLogs", String(id)),
+        {
+          lectureId: String(id),
+          title: lesson.title || `講義${id}`,
+          startedAt: (startedAt ?? now).toLocaleString("ja-JP"),
+          endedAt: now.toLocaleString("ja-JP"),
+          durationSeconds: currentWatchedSeconds,
+          watchedSeconds: currentWatchedSeconds,
+          videoDurationSeconds: currentVideoDurationSeconds,
+          watchProgress: currentWatchProgress,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+    };
+
     const startWatchTimer = () => {
       if (watchIntervalRef.current !== null) return;
 
@@ -171,22 +278,44 @@ export default function LessonDetailPage() {
 
         const duration = Math.floor(player.getDuration() || 0);
         const currentTime = Math.floor(player.getCurrentTime() || 0);
+        const playbackRate = player.getPlaybackRate?.() || 1;
+
+        if (playbackRate !== 1) {
+          player.setPlaybackRate(1);
+        }
 
         if (duration > 0) {
+          videoDurationSecondsRef.current = duration;
           setVideoDurationSeconds(duration);
         }
 
-        setWatchedSeconds((prev) => {
-          const nextWatchedSeconds = Math.max(prev, currentTime);
-          const requiredSeconds = Math.ceil(duration * 0.9);
+        const maxAllowedTime = watchedSecondsRef.current + allowedSeekBufferSeconds;
+        if (currentTime > maxAllowedTime) {
+          player.seekTo(watchedSecondsRef.current, true);
+          return;
+        }
 
-          if (duration > 0 && nextWatchedSeconds >= requiredSeconds) {
-            setCanStartTest(true);
-            stopWatchTimer();
-          }
+        const nextWatchedSeconds = Math.min(
+          watchedSecondsRef.current + 1,
+          duration > 0 ? duration : watchedSecondsRef.current + 1
+        );
 
-          return nextWatchedSeconds;
+        watchedSecondsRef.current = nextWatchedSeconds;
+        setWatchedSeconds(nextWatchedSeconds);
+
+        saveLectureProgress().catch((error) => {
+          console.error("視聴進捗保存エラー", error);
         });
+
+        const requiredSeconds = duration > 0 ? Math.ceil(duration * 0.9) : 0;
+
+        if (duration > 0 && nextWatchedSeconds >= requiredSeconds) {
+          setCanStartTest(true);
+          saveLectureProgress({ force: true }).catch((error) => {
+            console.error("90%視聴ログ保存エラー", error);
+          });
+          stopWatchTimer();
+        }
       }, 1000);
     };
 
@@ -204,6 +333,7 @@ export default function LessonDetailPage() {
           onReady: () => {
             const duration = Math.floor(playerRef.current?.getDuration() || 0);
             if (duration > 0) {
+              videoDurationSecondsRef.current = duration;
               setVideoDurationSeconds(duration);
             }
           },
@@ -213,25 +343,23 @@ export default function LessonDetailPage() {
             if (event.data === window.YT.PlayerState.PLAYING) {
               if (!hasSavedStartLogRef.current) {
                 const startTime = new Date();
-                const learnerId =
+                const activeLearnerId =
+                  learnerId ||
                   window.localStorage.getItem("learnerId") ||
                   window.localStorage.getItem("userId") ||
-                  window.localStorage.getItem("studentId") ||
-                  "kaigo010";
+                  window.localStorage.getItem("uid") ||
+                  "";
 
                 hasSavedStartLogRef.current = true;
                 setStartedAt(startTime);
 
                 setDoc(
-                  doc(db, "users", learnerId, "lectureLogs", String(id)),
+                  doc(db, "users", activeLearnerId, "lectureLogs", String(id)),
                   {
                     lectureId: String(id),
                     title: lesson.title || `講義${id}`,
                     startedAt: startTime.toLocaleString("ja-JP"),
                     startedAtTimestamp: serverTimestamp(),
-                    completed: false,
-                    testStarted: false,
-                    watchProgress: 0,
                     updatedAt: serverTimestamp(),
                   },
                   { merge: true }
@@ -247,18 +375,28 @@ export default function LessonDetailPage() {
             if (event.data === window.YT.PlayerState.ENDED) {
               const player = playerRef.current;
               const duration = Math.floor(player?.getDuration() || 0);
+              const requiredSeconds = duration > 0 ? Math.ceil(duration * 0.9) : 0;
 
               if (duration > 0) {
+                videoDurationSecondsRef.current = duration;
                 setVideoDurationSeconds(duration);
-                setWatchedSeconds(duration);
               }
 
-              setCanStartTest(true);
+              if (duration > 0 && watchedSecondsRef.current >= requiredSeconds) {
+                setCanStartTest(true);
+              }
+
+              saveLectureProgress({ force: true }).catch((error) => {
+                console.error("視聴終了ログ保存エラー", error);
+              });
               stopWatchTimer();
               return;
             }
 
             if (event.data === window.YT.PlayerState.PAUSED) {
+              saveLectureProgress({ force: true }).catch((error) => {
+                console.error("一時停止時ログ保存エラー", error);
+              });
               stopWatchTimer();
             }
           },
@@ -287,7 +425,7 @@ export default function LessonDetailPage() {
       playerRef.current?.destroy();
       playerRef.current = null;
     };
-  }, [lesson?.videoUrl]);
+  }, [id, learnerId, lesson, startedAt]);
 
   if (checkingAuth) {
     return (
@@ -340,16 +478,22 @@ export default function LessonDetailPage() {
 
   const handleStartTest = async () => {
     if (!canStartTest) {
-      alert("講義を最後まで視聴すると、テストを開始できます。");
+      alert("動画の90%以上を実際に視聴すると、テストを開始できます。");
       return;
     }
     if (!id || !lesson) return;
 
-    const learnerId =
+    const activeLearnerId =
+      learnerId ||
       window.localStorage.getItem("learnerId") ||
       window.localStorage.getItem("userId") ||
-      window.localStorage.getItem("studentId") ||
-      "kaigo010";
+      window.localStorage.getItem("uid") ||
+      "";
+
+    if (!activeLearnerId) {
+      setErrorMessage("ログイン情報を確認できませんでした。再ログインしてください。");
+      return;
+    }
 
     const endTime = new Date();
     const startTime = startedAt ?? endTime;
@@ -360,16 +504,16 @@ export default function LessonDetailPage() {
 
     try {
       await setDoc(
-        doc(db, "users", learnerId, "lectureLogs", String(id)),
+        doc(db, "users", activeLearnerId, "lectureLogs", String(id)),
         {
           lectureId: String(id),
           title: lesson.title || `講義${id}`,
           startedAt: startTime.toLocaleString("ja-JP"),
           endedAt: endTime.toLocaleString("ja-JP"),
-          durationSeconds,
-          watchedSeconds,
+          durationSeconds: Math.max(watchedSecondsRef.current, requiredSeconds),
+          watchedSeconds: Math.max(watchedSecondsRef.current, requiredSeconds),
           videoDurationSeconds,
-          watchProgress,
+          watchProgress: Math.max(watchProgress, 90),
           completed: false,
           testStarted: true,
           updatedAt: serverTimestamp(),
@@ -439,7 +583,7 @@ export default function LessonDetailPage() {
                   {canStartTest
                     ? "動画の90%以上を視聴しました。テストを開始できます。"
                     : videoDurationSeconds > 0
-                    ? `あと${remainingSeconds}秒ほど視聴するとテストを開始できます。`
+                    ? `あと${remainingSeconds}秒ほど実際に視聴するとテストを開始できます。`
                     : "動画を再生すると視聴時間の計測が始まります。"}
                 </p>
               </div>
@@ -447,38 +591,46 @@ export default function LessonDetailPage() {
           )}
         </div>
 
-        <div className="rounded-2xl bg-white border shadow-sm p-6 mb-8">
-          <h2 className="text-2xl font-semibold text-slate-900 mb-3">
-            講義内容
-          </h2>
-          <p className="text-slate-700 leading-7">
-            {lesson.content || "講義内容はまだ登録されていません。"}
-          </p>
-        </div>
 
-        <div className="flex flex-col sm:flex-row gap-4">
-          <p className="text-sm text-slate-500 mb-2">
-            確認テストは、動画の90%以上を視聴すると開始できます。
-          </p>
-          <button
-            type="button"
-            onClick={handleStartTest}
-            disabled={!canStartTest}
-            className={`inline-flex items-center justify-center rounded-lg px-6 py-3 font-medium transition ${
-              canStartTest
-                ? "bg-slate-900 text-white hover:bg-slate-800"
-                : "bg-slate-300 text-slate-500 cursor-not-allowed"
-            }`}
-          >
-            {canStartTest ? "テストを開始する" : "視聴完了後にテスト開始"}
-          </button>
+        <div className="space-y-4">
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <p className="text-sm font-semibold text-amber-900 mb-2">
+              受講時の注意
+            </p>
+            <ul className="space-y-1 text-sm text-amber-800 list-disc pl-5">
+              <li>
+                早送り・スキップ・倍速再生を行うと、正しく視聴時間が記録されない場合があります。
+              </li>
+              <li>
+                確認テストは、動画を90%以上実際に視聴した後に開始できます。
+              </li>
+              <li>
+                視聴記録が正常に保存されなかった場合、再ログイン後に再度視聴が必要になる場合があります。
+              </li>
+            </ul>
+          </div>
 
-          <Link
-            href="/mypage"
-            className="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-800 px-6 py-3 font-medium hover:bg-slate-100 transition"
-          >
-            マイページへ戻る
-          </Link>
+          <div className="flex flex-col sm:flex-row gap-4">
+            <button
+              type="button"
+              onClick={handleStartTest}
+              disabled={!canStartTest}
+              className={`inline-flex items-center justify-center rounded-lg px-6 py-3 font-medium transition ${
+                canStartTest
+                  ? "bg-slate-900 text-white hover:bg-slate-800"
+                  : "bg-slate-300 text-slate-500 cursor-not-allowed"
+              }`}
+            >
+              {canStartTest ? "テストを開始する" : "視聴完了後にテスト開始"}
+            </button>
+
+            <Link
+              href="/mypage"
+              className="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-800 px-6 py-3 font-medium hover:bg-slate-100 transition"
+            >
+              マイページへ戻る
+            </Link>
+          </div>
         </div>
       </div>
     </main>
