@@ -107,7 +107,7 @@ export default function FacilityAdminPage() {
 
         setLessons(fetchedLessons);
 
-        const fetchedLearners = await Promise.all(
+        const fetchedLearners: Array<Learner | null> = await Promise.all(
           usersSnapshot.docs.map(async (userDoc) => {
             const data = userDoc.data();
             const userFacilityId =
@@ -206,7 +206,11 @@ export default function FacilityAdminPage() {
           })
         );
 
-        setLearners(fetchedLearners.filter((learner): learner is Learner => learner !== null));
+        const visibleLearners: Learner[] = fetchedLearners.filter(
+          (learner): learner is Learner => learner !== null
+        );
+
+        setLearners(visibleLearners);
       } catch (error) {
         console.error("施設代表者用データ取得エラー", error);
         setErrorMessage(
