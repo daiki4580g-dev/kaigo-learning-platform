@@ -201,7 +201,7 @@ export default function AdminPage() {
         const learnersQuery = collection(db, "users");
         const snapshot = await getDocs(learnersQuery);
 
-        const fetchedLearners = await Promise.all(
+        const fetchedLearners: Array<Learner | null> = await Promise.all(
           snapshot.docs.map(async (doc) => {
             const data = doc.data();
             const learnerFacilityId =
@@ -334,7 +334,7 @@ export default function AdminPage() {
           })
         );
 
-        const visibleLearners = fetchedLearners.filter(
+        const visibleLearners: Learner[] = fetchedLearners.filter(
           (learner): learner is Learner => learner !== null
         );
         setLearners(visibleLearners);
