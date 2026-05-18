@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
   collection,
+  deleteDoc,
   doc,
   getDocs,
   orderBy,
@@ -332,6 +333,27 @@ export default function AdminTestsPage() {
 
     setMessage("編集内容を入力してください。");
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleDelete = async (testId: string, title: string) => {
+    const confirmed = window.confirm(
+      `「${title}」を削除しますか？\nこの操作は元に戻せません。`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      await deleteDoc(doc(db, "tests", testId));
+      setMessage("確認テストを削除しました。");
+      await fetchTests();
+    } catch (error) {
+      console.error("テスト削除エラー", error);
+      setMessage(
+        `確認テストの削除に失敗しました。詳細: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
   };
 
   const handleReset = () => {
@@ -764,13 +786,23 @@ export default function AdminTestsPage() {
                       <td className="px-4 py-4">{test.questions.length}問</td>
                       <td className="px-4 py-4">{test.updatedAt || "未記録"}</td>
                       <td className="px-4 py-4">
-                        <button
-                          type="button"
-                          onClick={() => handleEdit(test)}
-                          className="inline-flex items-center justify-center rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-800 transition"
-                        >
-                          編集
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleEdit(test)}
+                            className="inline-flex items-center justify-center rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-800 transition"
+                          >
+                            編集
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(test.id, test.title)}
+                            className="inline-flex items-center justify-center rounded-lg bg-red-600 text-white px-4 py-2 text-sm hover:bg-red-700 transition"
+                          >
+                            削除
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}

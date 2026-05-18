@@ -9,121 +9,159 @@ import { auth, db } from "@/lib/firebase";
 
 const curriculum = [
   {
-    unit: "第1単元",
-    chapter: "基礎理解",
-    goal: "介助動作や環境調整の具体的手法を習得し、安全な動作、事故予防を実践できるようになる。",
+    unit: "第1領域",
+    chapter: "身体負担軽減技術",
+    goal: "介護業務における身体負担の基礎を理解し、腰部負担の軽減、作業姿勢、疲労蓄積、安全行動、職員自身の転倒予防につなげる。",
     lessons: [
-      "転倒災害の現状とリスク",
-      "腰痛災害の現状とリスク",
-      "介護現場における事故の特徴",
-      "転倒が起こる仕組み",
-      "骨折と重症化のリスク",
-      "腰痛の基礎知識",
+      "身体負担の基礎",
+      "腰部負担軽減",
+      "作業姿勢",
+      "疲労蓄積",
+      "安全行動",
+      "職員の転倒予防",
     ],
   },
   {
-    unit: "第2単元",
-    chapter: "リスク理解",
-    goal: "転倒および腰痛のリスク要因を把握し、現場で評価できるようになる。",
+    unit: "第2領域",
+    chapter: "移乗・介助技術",
+    goal: "ボディメカニクスを踏まえ、ベッド介助、車椅子移乗、立ち上がり介助、福祉用具活用などの実践的な介助技術を身につける。",
     lessons: [
-      "転倒の内的要因（身体）",
-      "転倒の外的要因（環境）",
-      "身体機能と転倒リスク",
-      "バランス能力とは",
-      "筋力低下と転倒",
-      "疲労と転倒リスク",
-      "腰痛のリスク因子",
-      "現場におけるリスク評価",
-    ],
-  },
-  {
-    unit: "第3単元",
-    chapter: "身体機能",
-    goal: "身体機能と転倒・腰痛の関係を理解し、自身の状態を把握できるようになる。",
-    lessons: [
-      "柔軟性と怪我予防",
-      "股関節の役割",
-      "体幹の役割",
-      "下肢筋力の重要性",
-      "姿勢と身体負担",
-      "重心の安定性",
-      "歩行と転倒リスク",
-      "立ち上がり動作の理解",
-    ],
-  },
-  {
-    unit: "第4単元",
-    chapter: "病気の理解",
-    goal: "疾患と身体機能の関係を理解し、転倒・腰痛との関連を説明できるようになる。",
-    lessons: [
-      "加齢に伴う身体変化",
-      "筋力低下とサルコペニア",
-      "フレイルとは何か",
-      "骨粗鬆症の基礎知識",
-      "骨折しやすい身体の特徴",
-      "関節疾患（変形性関節症）の理解",
-      "慢性疼痛のメカニズム",
-      "腰痛の慢性化要因",
-    ],
-  },
-  {
-    unit: "第5単元",
-    chapter: "動作理論",
-    goal: "負担の少ない動作原則を理解し、安全な動作を選択できるようになる。",
-    lessons: [
-      "ボディメカニクスとは",
-      "支持基底面の考え方",
-      "力の伝達と効率",
-      "NG動作の特徴",
-      "良い動作の条件",
-      "腰に負担のかかる動作",
-      "力を使わない介助の考え方",
-      "安全な動作の原則",
-    ],
-  },
-  {
-    unit: "第6単元",
-    chapter: "メンタルヘルス",
-    goal: "ストレスや疲労の影響を理解し、セルフケアの重要性を認識できるようになる。",
-    lessons: [
-      "ストレスとは何か",
-      "介護職におけるストレスの特徴",
-      "ストレスと身体機能の関係",
-      "ストレスと腰痛の関係",
-      "疲労とパフォーマンス低下",
-      "メンタル不調のサイン",
-    ],
-  },
-  {
-    unit: "第7単元",
-    chapter: "実践応用",
-    goal: "安全な介助動作と環境調整を実践できるようになる。",
-    lessons: [
-      "移乗介助のポイント①",
-      "移乗介助のポイント②",
+      "ボディメカニクス",
+      "ベッド介助",
+      "車椅子移乗",
       "立ち上がり介助",
-      "体位変換の工夫",
-      "ベッド周囲での安全管理",
-      "転倒しやすい場面",
-      "移乗のNG例",
-      "環境改善",
-      "ケーススタディ①",
-      "ケーススタディ②",
-      "ケーススタディ③",
+      "福祉用具活用",
+      "実践ケース",
     ],
   },
   {
-    unit: "第8単元",
-    chapter: "定着・行動変容",
-    goal: "セルフケアを継続し、学習内容を業務に定着できるようになる。",
+    unit: "第3領域",
+    chapter: "転倒リスク管理",
+    goal: "利用者の転倒要因を理解し、環境整備、認知症への配慮、夜間転倒、ヒヤリハット、転倒後対応を実践できるようになる。",
     lessons: [
-      "ストレッチの基本",
-      "腰痛予防ストレッチ",
-      "バランストレーニング",
-      "体幹トレーニング",
-      "習慣化の具体策",
-      "継続のコツ",
-      "自己チェック方法",
+      "転倒要因",
+      "環境整備",
+      "認知症と転倒",
+      "夜間転倒",
+      "ヒヤリハット",
+      "転倒後対応",
+    ],
+  },
+  {
+    unit: "第4領域",
+    chapter: "セルフマネジメント",
+    goal: "睡眠、疲労管理、ストレス対処、コンディショニング、セルフケアを学び、業務継続を支える自己管理能力を高める。",
+    lessons: [
+      "睡眠",
+      "疲労管理",
+      "ストレス対処",
+      "コンディショニング",
+      "セルフケア",
+      "業務継続支援",
+    ],
+  },
+  {
+    unit: "第5領域",
+    chapter: "認知症対応技術",
+    goal: "BPSD、不穏、拒否への対応を理解し、声かけ、安全配慮、実践的コミュニケーションを通じて認知症利用者への対応力を高める。",
+    lessons: [
+      "BPSD対応",
+      "不穏時対応",
+      "拒否対応",
+      "声かけ",
+      "安全配慮",
+      "実践的コミュニケーション",
+    ],
+  },
+  {
+    unit: "第6領域",
+    chapter: "利用者尊厳・安全配慮",
+    goal: "尊厳保持、不適切ケア、身体拘束代替、接遇、感情コントロール、安全配慮行動について理解し、実践に活かす。",
+    lessons: [
+      "尊厳保持",
+      "不適切ケア",
+      "身体拘束代替",
+      "接遇",
+      "感情コントロール",
+      "安全配慮行動",
+    ],
+  },
+  {
+    unit: "第7領域",
+    chapter: "感染リスク管理",
+    goal: "標準予防策、PPE、感染経路、食中毒、集団感染、業務継続を学び、感染リスク管理の基本を実践できるようになる。",
+    lessons: [
+      "標準予防策",
+      "PPE",
+      "感染経路",
+      "食中毒",
+      "集団感染",
+      "業務継続",
+    ],
+  },
+  {
+    unit: "第8領域",
+    chapter: "事故予防技術",
+    goal: "介護現場における転倒事故、誤薬、送迎事故、観察技術、報告、再発防止を学び、事故予防行動につなげる。",
+    lessons: [
+      "転倒事故",
+      "誤薬",
+      "送迎事故",
+      "観察技術",
+      "報告",
+      "再発防止",
+    ],
+  },
+  {
+    unit: "第9領域",
+    chapter: "災害・BCP",
+    goal: "災害初動、安否確認、BCP、感染BCP、緊急時対応、サービス継続を理解し、災害時にも介護サービスを継続できる力を養う。",
+    lessons: [
+      "災害初動",
+      "安否確認",
+      "BCP",
+      "感染BCP",
+      "緊急時対応",
+      "サービス継続",
+    ],
+  },
+  {
+    unit: "第10領域",
+    chapter: "倫理・専門職教育",
+    goal: "個人情報保護、倫理、SNS、信頼関係、法令理解、専門職行動を学び、介護専門職としての倫理実践につなげる。",
+    lessons: [
+      "個人情報保護",
+      "倫理",
+      "SNS",
+      "信頼関係",
+      "法令理解",
+      "専門職行動",
+    ],
+  },
+  {
+    unit: "第11領域",
+    chapter: "チームケア",
+    goal: "報連相、多職種連携、情報共有、ハラスメント配慮、チーム支援、指導方法を学び、職場内コミュニケーションを高める。",
+    lessons: [
+      "報連相",
+      "多職種連携",
+      "情報共有",
+      "ハラスメント配慮",
+      "チーム支援",
+      "指導方法",
+    ],
+  },
+  {
+    unit: "第12領域",
+    chapter: "総復習・定着",
+    goal: "年間研修の総復習、理解度確認、行動定着、ケース振り返り、安全文化、次年度目標を整理し、学習内容を現場に定着させる。",
+    lessons: [
+      "総復習",
+      "理解度確認",
+      "行動定着",
+      "ケース振り返り",
+      "安全文化",
+      "次年度目標",
     ],
   },
 ];
@@ -177,6 +215,7 @@ export default function MyPage() {
   const [userName, setUserName] = useState("");
   const [facilityId, setFacilityId] = useState("");
   const [announcement, setAnnouncement] = useState<Announcement | null>(null);
+  const [openUnits, setOpenUnits] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -371,7 +410,7 @@ export default function MyPage() {
             {userName ? `${userName}さんのマイページ` : "マイページ"}
           </h1>
           <p className="text-slate-300 leading-7 max-w-3xl">
-            転倒予防・腰痛予防に関する全8単元の講義を確認できます。各講義を視聴し、確認テストへ進んでください。
+            介護職員向け年間教育研修として、身体負担軽減、移乗・介助、転倒予防、感染対策、認知症対応、倫理・チームケアなど全12領域の講義を確認できます。各講義を視聴し、確認テストへ進んでください。
           </p>
         </div>
 
@@ -454,94 +493,112 @@ export default function MyPage() {
 
         <div className="space-y-8">
           {curriculum.map((unit) => (
-            <section key={unit.unit} className="rounded-2xl bg-white border shadow-sm p-6">
-              <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-5">
-                <div>
-                  <h2 className="text-2xl font-bold text-slate-900 mb-2">{unit.chapter}</h2>
-                  <p className="text-slate-600 leading-7 max-w-4xl">{unit.goal}</p>
+            <section key={unit.unit} className="rounded-2xl bg-white border shadow-sm overflow-hidden">
+              <button
+                type="button"
+                onClick={() =>
+                  setOpenUnits((prev) => ({
+                    ...prev,
+                    [unit.unit]: !prev[unit.unit],
+                  }))
+                }
+                className="w-full p-6 text-left hover:bg-slate-50 transition"
+              >
+                <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                  <div>
+                    <h2 className="text-2xl font-bold text-slate-900 mb-2">{unit.chapter}</h2>
+                    <p className="text-slate-600 leading-7 max-w-4xl">{unit.goal}</p>
+                  </div>
+                  <span className="inline-flex items-center rounded-full bg-slate-100 text-slate-700 px-4 py-2 text-sm font-medium w-fit">
+                    {unit.lessons.length}講義
+                  </span>
                 </div>
-                <span className="inline-flex items-center rounded-full bg-slate-100 text-slate-700 px-4 py-2 text-sm font-medium w-fit">
-                  {unit.lessons.length}講義
-                </span>
-              </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {(() => {
-                  const unitStartLessonNumber = lessonNumber + 1;
+                <div className="mt-4 flex items-center justify-between">
+                  <span className="text-sm text-slate-500">
+                    クリックして講義一覧を表示
+                  </span>
 
-                  return unit.lessons.map((lessonTitle) => {
-                  lessonNumber += 1;
-                  const currentLessonNumber = lessonNumber;
-                  const log = lectureLogs[String(currentLessonNumber)];
-                  const status = getLessonStatus(log);
+                  <span className="text-slate-500 text-xl font-bold">
+                    {openUnits[unit.unit] ? "−" : "+"}
+                  </span>
+                </div>
+              </button>
 
-                  const isFirstLessonInUnit =
-                    currentLessonNumber === unitStartLessonNumber;
+              {openUnits[unit.unit] && (
+                <div className="px-6 pb-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {(() => {
+                      const unitStartLessonNumber = lessonNumber + 1;
 
-                  const previousLessonLog = isFirstLessonInUnit
-                    ? undefined
-                    : lectureLogs[String(currentLessonNumber - 1)];
+                      return unit.lessons.map((lessonTitle) => {
+                        lessonNumber += 1;
+                        const currentLessonNumber = lessonNumber;
+                        const log = lectureLogs[String(currentLessonNumber)];
+                        const status = getLessonStatus(log);
 
-                  const canOpenLesson =
-                    isFirstLessonInUnit || previousLessonLog?.completed === true;
+                        const isFirstLessonInUnit =
+                          currentLessonNumber === unitStartLessonNumber;
 
-                  return (
-                    <div key={`${unit.unit}-${lessonTitle}`} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                      <div className="flex items-start justify-between gap-3 mb-3">
-                        <div>
-                          <p className="text-xs text-slate-500 mb-1">講義{currentLessonNumber}</p>
-                          <h3 className="font-semibold text-slate-900 leading-6">{lessonTitle}</h3>
-                        </div>
-                        <span
-                          className={`inline-flex shrink-0 items-center rounded-full px-3 py-1 text-xs font-medium ${
-                            !canOpenLesson
-                              ? "bg-slate-200 text-slate-500"
-                              : status === "完了"
-                              ? "bg-emerald-100 text-emerald-700"
-                              : status === "視聴完了" || status === "テスト開始済み"
-                              ? "bg-amber-100 text-amber-700"
-                              : status === "視聴中"
-                              ? "bg-blue-100 text-blue-700"
-                              : "bg-slate-100 text-slate-600"
-                          }`}
-                        >
-                          {canOpenLesson ? status : "ロック中"}
-                        </span>
-                      </div>
+                        const previousLessonLog = isFirstLessonInUnit
+                          ? undefined
+                          : lectureLogs[String(currentLessonNumber - 1)];
 
-                      {log && (
-                        <div className="mb-3 text-xs text-slate-500 space-y-1">
-                          <p>視聴率：{log.watchProgress}%</p>
-                          <p>視聴時間：{formatWatchTime(log.watchedSeconds)}</p>
-                        </div>
-                      )}
+                        const canOpenLesson =
+                          isFirstLessonInUnit || previousLessonLog?.completed === true;
 
-                      {canOpenLesson ? (
-                        <Link
-                          href={`/lesson/${currentLessonNumber}`}
-                          className="inline-flex items-center justify-center rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-800 transition"
-                        >
-                          {status === "未視聴" ? "視聴する" : "続きから確認する"}
-                        </Link>
-                      ) : (
-                        <div className="space-y-2">
-                          <button
-                            type="button"
-                            disabled
-                            className="inline-flex cursor-not-allowed items-center justify-center rounded-lg bg-slate-300 text-slate-500 px-4 py-2 text-sm"
-                          >
-                            受講ロック中
-                          </button>
-                          <p className="text-xs text-slate-500">
-                            前の講義を完了すると受講できます。
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  );
-                  });
-                })()}
-              </div>
+                        return (
+                          <div key={`${unit.unit}-${lessonTitle}`} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                            <div className="flex items-start justify-between gap-3 mb-3">
+                              <div>
+                                <p className="text-xs text-slate-500 mb-1">講義{currentLessonNumber}</p>
+                                <h3 className="font-semibold text-slate-900 leading-6">{lessonTitle}</h3>
+                              </div>
+                              <span
+                                className={`inline-flex shrink-0 items-center rounded-full px-3 py-1 text-xs font-medium ${
+                                  !canOpenLesson
+                                    ? "bg-slate-200 text-slate-500"
+                                    : status === "完了"
+                                    ? "bg-emerald-100 text-emerald-700"
+                                    : status === "視聴完了" || status === "テスト開始済み"
+                                    ? "bg-amber-100 text-amber-700"
+                                    : status === "視聴中"
+                                    ? "bg-blue-100 text-blue-700"
+                                    : "bg-slate-100 text-slate-600"
+                                }`}
+                              >
+                                {canOpenLesson ? status : "ロック中"}
+                              </span>
+                            </div>
+
+                            {canOpenLesson ? (
+                              <Link
+                                href={`/lesson/${currentLessonNumber}`}
+                                className="inline-flex items-center justify-center rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-800 transition"
+                              >
+                                {status === "未視聴" ? "視聴する" : "続きから確認する"}
+                              </Link>
+                            ) : (
+                              <div className="space-y-2">
+                                <button
+                                  type="button"
+                                  disabled
+                                  className="inline-flex cursor-not-allowed items-center justify-center rounded-lg bg-slate-300 text-slate-500 px-4 py-2 text-sm"
+                                >
+                                  受講ロック中
+                                </button>
+                                <p className="text-xs text-slate-500">
+                                  前の講義を完了すると受講できます。
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
+                </div>
+              )}
             </section>
           ))}
         </div>

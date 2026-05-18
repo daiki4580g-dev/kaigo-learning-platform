@@ -26,7 +26,7 @@ export default function LoginPage() {
     setErrorMessage("");
 
     if (!email || !password) {
-      setErrorMessage("メールアドレスとパスワードを入力してください。");
+      setErrorMessage("ユーザー名とパスワードを入力してください。");
       return;
     }
 
@@ -91,7 +91,7 @@ export default function LoginPage() {
       setNeedsProfileSetup(true);
     } catch {
       setErrorMessage(
-        "ログインに失敗しました。メールアドレスまたはパスワードをご確認ください。"
+        "ログインに失敗しました。ユーザー名またはパスワードをご確認ください。"
       );
     } finally {
       setLoading(false);
@@ -246,13 +246,13 @@ export default function LoginPage() {
         <h1 className="text-3xl font-bold text-slate-900 mb-2">ログイン</h1>
 
         <p className="text-slate-600 mb-6">
-          メールアドレスとパスワードを入力してください
+          ユーザー名とパスワードを入力してください
         </p>
 
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">
-              メールアドレス
+              ユーザー名
             </label>
 
             <input
@@ -262,7 +262,7 @@ export default function LoginPage() {
                 setEmail(e.target.value);
                 if (errorMessage) setErrorMessage("");
               }}
-              placeholder="example@mail.com"
+              placeholder="ユーザー名を入力"
               className="w-full rounded-lg border px-3 py-2 text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-slate-300"
             />
           </div>

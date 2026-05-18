@@ -4,7 +4,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { collection, doc, getDocs, orderBy, query, setDoc } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDocs, orderBy, query, setDoc } from "firebase/firestore";
 import { db } from "../../../lib/firebase";
 
 type Lesson = {
@@ -49,13 +49,13 @@ const emptyForm: LessonForm = {
   videoUrl: "",
   minutes: "5",
   order: "1",
-  unitTitle: "基礎理解",
+  unitTitle: "介護業務における身体負担軽減技術",
   unitOrder: "1",
   lessonOrderInUnit: "1",
   isPublished: true,
-  courseName: "腰痛・転倒予防研修",
-  category: "腰痛予防",
-  lessonType: "通常講義",
+  courseName: "介護職員向け年間教育研修",
+  category: "身体負担軽減技術",
+  lessonType: "助成金対応研修",
 };
 
 export default function AdminLessonsPage() {
@@ -161,16 +161,42 @@ export default function AdminLessonsPage() {
       videoUrl: lesson.videoUrl ?? "",
       minutes: String(lesson.minutes ?? 5),
       order: String(lesson.order ?? 1),
-      unitTitle: lesson.unitTitle ?? "基礎理解",
+      unitTitle: lesson.unitTitle ?? "介護業務における身体負担軽減技術",
       unitOrder: String(lesson.unitOrder ?? 1),
       lessonOrderInUnit: String(lesson.lessonOrderInUnit ?? 1),
       isPublished: lesson.isPublished ?? true,
-      courseName: lesson.courseName ?? "腰痛・転倒予防研修",
-      category: lesson.category ?? "腰痛予防",
-      lessonType: lesson.lessonType ?? "通常講義",
+      courseName: lesson.courseName ?? "介護職員向け年間教育研修",
+      category: lesson.category ?? "身体負担軽減技術",
+      lessonType: lesson.lessonType ?? "助成金対応研修",
     });
     setMessage("編集内容を入力してください。");
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleDelete = async (lessonId: string, title: string) => {
+    const confirmed = window.confirm(
+      `「${title}」を削除しますか？\nこの操作は元に戻せません。`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      await deleteDoc(doc(db, "lessons", lessonId));
+      setMessage("講義を削除しました。");
+
+      if (form.id === lessonId) {
+        setForm(emptyForm);
+      }
+
+      await fetchLessons();
+    } catch (error) {
+      console.error("講義削除エラー", error);
+      setMessage(
+        `講義の削除に失敗しました。詳細: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
   };
 
   const handleReset = () => {
@@ -275,8 +301,8 @@ export default function AdminLessonsPage() {
           <p className="text-slate-300 mb-2">管理者画面</p>
           <h1 className="text-4xl font-bold mb-3">講義管理</h1>
           <p className="text-slate-300 leading-7">
-            講義タイトル、説明、YouTube URL、公開状態、コース分類を管理できます。
-            動画を差し替える場合は、YouTube URLを変更して保存してください。
+            介護職員向け年間教育研修の講義タイトル、説明、YouTube URL、公開状態、教育領域・研修テーマを管理できます。
+            助成金申請に対応しやすい研修テーマ名で登録できます。
           </p>
         </div>
 
@@ -298,26 +324,30 @@ export default function AdminLessonsPage() {
         <section className="rounded-2xl bg-white border shadow-sm p-6">
           <h2 className="text-2xl font-bold text-slate-900 mb-4">講義の追加・編集</h2>
 
-          <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 text-sm text-slate-700 mb-5 space-y-2">
-            <p className="font-semibold text-slate-900">分類入力の例</p>
+          <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 text-sm text-slate-700 mb-5 space-y-3">
+            <p className="font-semibold text-slate-900">年間研修構成の入力例</p>
             <p>
               <span className="font-medium">コース名：</span>
-              腰痛・転倒予防研修／感染症対策研修／虐待防止研修／身体拘束適正化研修／認知症介護基礎研修
+              介護職員向け年間教育研修
             </p>
             <p>
-              <span className="font-medium">カテゴリ：</span>
-              腰痛予防／転倒予防／介助動作／感染対策／安全衛生／メンタルヘルス／法定研修
+              <span className="font-medium">教育領域：</span>
+              身体負担軽減技術／移乗・介助技術／転倒リスク管理／セルフマネジメント／認知症対応技術／利用者尊厳・安全配慮／感染リスク管理／事故予防技術／災害・BCP／倫理・専門職教育／チームケア／総復習・定着
+            </p>
+            <p>
+              <span className="font-medium">研修テーマ：</span>
+              介護業務における身体負担軽減技術／移乗・介助実践技術／転倒予防と環境リスク管理技術／疲労管理と業務継続支援技術／認知症利用者対応技術／利用者尊厳と安全配慮実践／感染リスク管理と業務継続技術／介護現場における事故予防技術／災害時対応と介護サービス継続技術／介護専門職としての倫理実践／チームケアと職場コミュニケーション技術／年間振り返りと安全行動定着
+            </p>
+            <p>
+              <span className="font-medium">単元順：</span>
+              1〜12 ／ <span className="font-medium">単元内の講義順：</span>1〜6
             </p>
             <p>
               <span className="font-medium">講義タイプ：</span>
-              通常講義／法定研修／確認テスト／オリエンテーション
+              助成金対応研修／確認テスト／オリエンテーション
             </p>
-            <p>
-              <span className="font-medium">単元名：</span>
-              基礎理解／リスク理解／実践編 ／ 単元順：1、2、3 ／ 単元内の講義順：1、2、3
-            </p>
-            <p className="text-xs text-slate-500">
-              例：法定研修を追加する場合は、コース名に「感染症対策研修」、カテゴリに「感染対策」、講義タイプに「法定研修」を設定します。
+            <p className="text-xs text-slate-500 leading-6">
+              例：第1領域は、カテゴリに「身体負担軽減技術」、単元名に「介護業務における身体負担軽減技術」、単元順に「1」、単元内の講義順に「1〜6」を設定します。
             </p>
           </div>
 
@@ -364,7 +394,7 @@ export default function AdminLessonsPage() {
                 onChange={(event) =>
                   setForm((prev) => ({ ...prev, unitTitle: event.target.value }))
                 }
-                placeholder="例：基礎理解"
+                placeholder="例：介護業務における身体負担軽減技術"
                 className="w-full rounded-lg border border-slate-300 px-4 py-2 outline-none focus:ring-2 focus:ring-slate-300"
               />
             </div>
@@ -406,7 +436,7 @@ export default function AdminLessonsPage() {
                 onChange={(event) =>
                   setForm((prev) => ({ ...prev, courseName: event.target.value }))
                 }
-                placeholder="例：腰痛・転倒予防研修"
+                placeholder="例：介護職員向け年間教育研修"
                 className="w-full rounded-lg border border-slate-300 px-4 py-2 outline-none focus:ring-2 focus:ring-slate-300"
               />
             </div>
@@ -420,7 +450,7 @@ export default function AdminLessonsPage() {
                 onChange={(event) =>
                   setForm((prev) => ({ ...prev, category: event.target.value }))
                 }
-                placeholder="例：腰痛予防"
+                placeholder="例：身体負担軽減技術"
                 className="w-full rounded-lg border border-slate-300 px-4 py-2 outline-none focus:ring-2 focus:ring-slate-300"
               />
             </div>
@@ -436,7 +466,7 @@ export default function AdminLessonsPage() {
                 }
                 className="w-full rounded-lg border border-slate-300 px-4 py-2 outline-none focus:ring-2 focus:ring-slate-300"
               >
-                <option value="通常講義">通常講義</option>
+                <option value="助成金対応研修">助成金対応研修</option>
                 <option value="法定研修">法定研修</option>
                 <option value="確認テスト">確認テスト</option>
                 <option value="オリエンテーション">オリエンテーション</option>
@@ -450,7 +480,7 @@ export default function AdminLessonsPage() {
               <input
                 value={form.title ?? ""}
                 onChange={(event) => setForm((prev) => ({ ...prev, title: event.target.value }))}
-                placeholder="例：転倒災害の現状とリスク"
+                placeholder="例：身体負担の基礎"
                 className="w-full rounded-lg border border-slate-300 px-4 py-2 outline-none focus:ring-2 focus:ring-slate-300"
               />
             </div>
@@ -462,7 +492,7 @@ export default function AdminLessonsPage() {
               <input
                 value={form.description ?? ""}
                 onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))}
-                placeholder="講義の概要を入力"
+                placeholder="例：介護業務における身体負担の基本を学びます。"
                 className="w-full rounded-lg border border-slate-300 px-4 py-2 outline-none focus:ring-2 focus:ring-slate-300"
               />
             </div>
@@ -622,13 +652,23 @@ export default function AdminLessonsPage() {
                       </td>
                       <td className="px-4 py-4 max-w-72 truncate">{lesson.videoUrl}</td>
                       <td className="px-4 py-4">
-                        <button
-                          type="button"
-                          onClick={() => handleEdit(lesson)}
-                          className="inline-flex items-center justify-center rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-800 transition"
-                        >
-                          編集
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleEdit(lesson)}
+                            className="inline-flex items-center justify-center rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-800 transition"
+                          >
+                            編集
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(lesson.id, lesson.title)}
+                            className="inline-flex items-center justify-center rounded-lg bg-red-600 text-white px-4 py-2 text-sm hover:bg-red-700 transition"
+                          >
+                            削除
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}

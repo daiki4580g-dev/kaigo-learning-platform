@@ -86,6 +86,7 @@ export default function LessonDetailPage() {
   const playerRef = useRef<YouTubePlayer | null>(null);
   const watchIntervalRef = useRef<number | null>(null);
   const hasSavedStartLogRef = useRef(false);
+  const hasUnlockedTestRef = useRef(false);
   const watchedSecondsRef = useRef(0);
   const videoDurationSecondsRef = useRef(0);
   const lastProgressSaveAtRef = useRef(0);
@@ -156,6 +157,7 @@ export default function LessonDetailPage() {
     setVideoDurationSeconds(0);
     setCanStartTest(false);
     hasSavedStartLogRef.current = false;
+    hasUnlockedTestRef.current = false;
     watchedSecondsRef.current = 0;
     videoDurationSecondsRef.current = 0;
     lastProgressSaveAtRef.current = 0;
@@ -199,6 +201,7 @@ export default function LessonDetailPage() {
         }
 
         if (existingWatchProgress >= 90 || existingTestStarted) {
+          hasUnlockedTestRef.current = true;
           setCanStartTest(true);
         }
       } catch (error) {
@@ -311,12 +314,16 @@ export default function LessonDetailPage() {
 
         const requiredSeconds = duration > 0 ? Math.ceil(duration * 0.9) : 0;
 
-        if (duration > 0 && nextWatchedSeconds >= requiredSeconds) {
+        if (
+          duration > 0 &&
+          nextWatchedSeconds >= requiredSeconds &&
+          !hasUnlockedTestRef.current
+        ) {
+          hasUnlockedTestRef.current = true;
           setCanStartTest(true);
           saveLectureProgress({ force: true }).catch((error) => {
             console.error("90%視聴ログ保存エラー", error);
           });
-          stopWatchTimer();
         }
       }, 1000);
     };
@@ -523,7 +530,7 @@ export default function LessonDetailPage() {
         { merge: true }
       );
 
-      router.push(`/test/${id}`);
+      window.location.href = `/test/${id}`;
     } catch (error) {
       console.error("視聴終了ログ保存エラー", error);
       setErrorMessage("視聴ログの保存に失敗しました。もう一度お試しください。");

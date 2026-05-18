@@ -18,6 +18,8 @@ type LectureLog = {
   watchProgress: number;
   testStarted: boolean;
   completed: boolean;
+  testAttemptCount: number;
+  testPassedAttempt: number | null;
   updatedAt: string;
 };
 
@@ -247,6 +249,14 @@ export default function AdminPage() {
                     : 0;
                 const completed = lectureData.completed === true;
                 const testStarted = lectureData.testStarted === true;
+                const testAttemptCount =
+                  typeof lectureData.testAttemptCount === "number"
+                    ? lectureData.testAttemptCount
+                    : 0;
+                const testPassedAttempt =
+                  typeof lectureData.testPassedAttempt === "number"
+                    ? lectureData.testPassedAttempt
+                    : null;
 
                 if (completed) completedLectureCount += 1;
                 if (testStarted) testStartedCount += 1;
@@ -277,6 +287,8 @@ export default function AdminPage() {
                   watchProgress: formatProgress(watchProgress),
                   testStarted,
                   completed,
+                  testAttemptCount,
+                  testPassedAttempt,
                   updatedAt:
                     typeof lectureData.updatedAt === "string"
                       ? lectureData.updatedAt
@@ -620,6 +632,8 @@ export default function AdminPage() {
         watchProgress: log?.watchProgress ?? 0,
         testStarted: log?.testStarted ?? false,
         completed: log?.completed ?? false,
+        testAttemptCount: log?.testAttemptCount ?? 0,
+        testPassedAttempt: log?.testPassedAttempt ?? null,
         updatedAt: log?.updatedAt ?? "未記録",
         lectureStatus: getLectureStatus(log),
       };
@@ -647,6 +661,8 @@ export default function AdminPage() {
       "動画時間（秒）",
       "視聴率（%）",
       "テスト開始",
+      "受験回数",
+      "合格回",
       "完了",
       "状況",
     ];
@@ -667,6 +683,8 @@ export default function AdminPage() {
       log.videoDurationSeconds,
       log.watchProgress,
       log.testStarted ? "開始済み" : "未開始",
+      log.testAttemptCount || "",
+      log.testPassedAttempt ? `${log.testPassedAttempt}回目` : "未合格",
       log.completed ? "完了" : "未完了",
       log.lectureStatus,
     ]);
@@ -1278,6 +1296,8 @@ export default function AdminPage() {
                     <th className="px-4 py-3">実視聴</th>
                     <th className="px-4 py-3">視聴率</th>
                     <th className="px-4 py-3">テスト</th>
+                    <th className="px-4 py-3">受験回数</th>
+                    <th className="px-4 py-3">合格回</th>
                     <th className="px-4 py-3">完了</th>
                     <th className="px-4 py-3">状況</th>
                   </tr>
@@ -1302,6 +1322,12 @@ export default function AdminPage() {
                       <td className="px-4 py-4">{formatWatchTime(log.watchedSeconds)}</td>
                       <td className="px-4 py-4">{log.watchProgress}%</td>
                       <td className="px-4 py-4">{log.testStarted ? "開始済み" : "未開始"}</td>
+                      <td className="px-4 py-4">
+                        {log.testAttemptCount > 0 ? `${log.testAttemptCount}回` : "-"}
+                      </td>
+                      <td className="px-4 py-4">
+                        {log.testPassedAttempt ? `${log.testPassedAttempt}回目` : "未合格"}
+                      </td>
                       <td className="px-4 py-4">{log.completed ? "完了" : "未完了"}</td>
                       <td className="px-4 py-4">
                         <span
