@@ -33,7 +33,11 @@ export default function LoginPage() {
     try {
       setLoading(true);
 
-      const result = await signInWithEmailAndPassword(auth, email, password);
+      const loginEmail = email.includes("@")
+        ? email.trim()
+        : `${email.trim()}@kaigo-learning.local`;
+
+      const result = await signInWithEmailAndPassword(auth, loginEmail, password);
       const uid = result.user.uid;
 
       localStorage.setItem("uid", uid);
@@ -256,7 +260,7 @@ export default function LoginPage() {
             </label>
 
             <input
-              type="email"
+              type="text"
               value={email}
               onChange={(e) => {
                 setEmail(e.target.value);
