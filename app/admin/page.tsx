@@ -134,7 +134,7 @@ export default function AdminPage() {
     const uid = localStorage.getItem("uid");
 
     if (!uid) {
-      router.push("/login");
+      router.push("/admin-login");
       return;
     }
 
@@ -172,7 +172,7 @@ export default function AdminPage() {
 
         if (!adminDoc.exists()) {
           alert("管理者情報を確認できませんでした。再ログインしてください。");
-          router.push("/login");
+          router.push("/admin-login");
           return;
         }
 

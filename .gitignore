@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Firebase Admin SDK secret key
+serviceAccountKey.json
+
+# Local bulk-import CSV files containing passwords
+data/*.csv

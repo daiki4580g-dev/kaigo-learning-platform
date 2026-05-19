@@ -243,10 +243,10 @@ export default function LoginPage() {
   return (
     <main className="min-h-screen bg-slate-50 flex items-center justify-center px-6">
       <div className="w-full max-w-md rounded-2xl bg-white border shadow-sm p-8">
-        <h1 className="text-3xl font-bold text-slate-900 mb-2">ログイン</h1>
+        <h1 className="text-3xl font-bold text-slate-900 mb-2">通常ユーザーログイン</h1>
 
         <p className="text-slate-600 mb-6">
-          ユーザー名とパスワードを入力してください
+          受講者用のログイン画面です。ユーザー名とパスワードを入力してください。
         </p>
 
         <div className="space-y-4">
@@ -295,7 +295,7 @@ export default function LoginPage() {
             disabled={loading}
             className="w-full rounded-lg bg-slate-900 text-white py-2.5 font-medium hover:bg-slate-800 transition disabled:opacity-50"
           >
-            {loading ? "ログイン中..." : "ログイン"}
+            {loading ? "ログイン中..." : "受講者としてログイン"}
           </button>
         </div>
       </div>

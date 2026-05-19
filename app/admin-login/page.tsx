@@ -18,7 +18,7 @@ export default function AdminLoginPage() {
     setErrorMessage("");
 
     if (!email || !password) {
-      setErrorMessage("メールアドレスとパスワードを入力してください。");
+      setErrorMessage("ユーザー名とパスワードを入力してください。");
       return;
     }
 
@@ -62,7 +62,7 @@ export default function AdminLoginPage() {
       }
     } catch {
       setErrorMessage(
-        "ログインに失敗しました。メールアドレスまたはパスワードをご確認ください。"
+        "ログインに失敗しました。ユーザー名またはパスワードをご確認ください。"
       );
     } finally {
       setLoading(false);
@@ -78,28 +78,28 @@ export default function AdminLoginPage() {
           </p>
 
           <h1 className="text-3xl font-bold text-slate-900">
-            管理者ログイン
+            管理者専用ログイン
           </h1>
 
           <p className="mt-3 text-slate-600 text-sm leading-6">
-            運営管理者・施設管理者専用ページです。
+            運営管理者・施設管理者専用のログインページです。
           </p>
         </div>
 
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">
-              メールアドレス
+              ユーザー名
             </label>
 
             <input
-              type="email"
+              type="text"
               value={email}
               onChange={(e) => {
                 setEmail(e.target.value);
                 if (errorMessage) setErrorMessage("");
               }}
-              placeholder="admin@example.com"
+              placeholder="ユーザー名を入力"
               className="w-full rounded-xl border px-4 py-3 text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-slate-300"
             />
           </div>
@@ -132,7 +132,7 @@ export default function AdminLoginPage() {
             disabled={loading}
             className="w-full rounded-xl bg-slate-900 py-3 text-white font-medium transition hover:bg-slate-800 disabled:opacity-50"
           >
-            {loading ? "ログイン中..." : "管理者ログイン"}
+            {loading ? "ログイン中..." : "管理者としてログイン"}
           </button>
         </div>
       </div>
