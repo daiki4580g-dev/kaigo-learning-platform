@@ -3,7 +3,17 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  limit,
+  query,
+  serverTimestamp,
+  setDoc,
+  where,
+} from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "../../../lib/firebase";
 
@@ -128,15 +138,44 @@ export default function LessonDetailPage() {
       }
 
       try {
-        const docRef = doc(db, "lessons", String(id));
+        const lessonId = String(id);
+        const docRef = doc(db, "lessons", lessonId);
         const docSnap = await getDoc(docRef);
 
-        if (!docSnap.exists()) {
-          setLesson(null);
+        if (docSnap.exists()) {
+          setLesson(docSnap.data() as Lesson);
           return;
         }
 
-        setLesson(docSnap.data() as Lesson);
+        const numericLessonId = Number(lessonId);
+
+        if (!Number.isNaN(numericLessonId)) {
+          const orderQuery = query(
+            collection(db, "lessons"),
+            where("order", "==", numericLessonId),
+            limit(1)
+          );
+          const orderSnapshot = await getDocs(orderQuery);
+
+          if (!orderSnapshot.empty) {
+            setLesson(orderSnapshot.docs[0].data() as Lesson);
+            return;
+          }
+
+          const lessonOrderQuery = query(
+            collection(db, "lessons"),
+            where("lessonOrderInUnit", "==", numericLessonId),
+            limit(1)
+          );
+          const lessonOrderSnapshot = await getDocs(lessonOrderQuery);
+
+          if (!lessonOrderSnapshot.empty) {
+            setLesson(lessonOrderSnapshot.docs[0].data() as Lesson);
+            return;
+          }
+        }
+
+        setLesson(null);
       } catch (error) {
         console.error("講義取得エラー", error);
         setErrorMessage("講義データの読み込みに失敗しました。");

@@ -14,7 +14,11 @@ type CsvUser = {
   role: string;
 };
 
-const csvPath = path.join(process.cwd(), "data", "users.csv");
+const csvPath = process.argv[2]
+  ? path.resolve(process.argv[2])
+  : path.join(process.cwd(), "data", "users.csv");
+
+console.log(`使用するCSV: ${csvPath}`);
 const serviceAccountPath = path.join(process.cwd(), "serviceAccountKey.json");
 
 const normalizeEmailFromUsername = (username: string) => {
