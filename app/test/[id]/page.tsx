@@ -685,11 +685,6 @@ useEffect(() => {
                 );
               })}
             </div>
-            {submitted && (
-              <p className="mt-4 text-sm text-slate-600">
-                正答：{item.options[item.correctIndex]}
-              </p>
-            )}
 
             {submitted && showRetry && retryQuestionIds.includes(item.id) && (
               <div className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4">
