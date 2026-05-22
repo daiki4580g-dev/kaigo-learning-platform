@@ -162,6 +162,8 @@ const curriculum = [
   },
 ];
 
+
+const trialLessonTitle = "身体拘束適正化に向けた介助実践";
 const totalLessons = curriculum.reduce((sum, unit) => sum + unit.lessons.length, 0);
 
 type LectureLog = {
@@ -210,6 +212,8 @@ export default function MyPage() {
   const [loadingLogs, setLoadingLogs] = useState(true);
   const [userName, setUserName] = useState("");
   const [facilityId, setFacilityId] = useState("");
+  const [userRole, setUserRole] = useState("");
+  const [isTrialUser, setIsTrialUser] = useState(false);
   const [announcement, setAnnouncement] = useState<Announcement | null>(null);
   const [openUnits, setOpenUnits] = useState<Record<string, boolean>>({});
 
@@ -232,6 +236,33 @@ export default function MyPage() {
           const userSnap = await getDoc(doc(db, "users", user.uid));
           if (userSnap.exists()) {
             const userData = userSnap.data();
+            const fetchedRole =
+              typeof userData.role === "string" ? userData.role : "";
+            const normalizedRole = fetchedRole.toLowerCase();
+            const fetchedAccountType =
+              typeof userData.accountType === "string"
+                ? userData.accountType.toLowerCase()
+                : "";
+            const fetchedPlan =
+              typeof userData.plan === "string" ? userData.plan.toLowerCase() : "";
+            const fetchedIsTrial =
+              normalizedRole === "trial" ||
+              fetchedAccountType === "trial" ||
+              fetchedPlan === "trial" ||
+              userData.isTrial === true;
+
+            setUserRole(normalizedRole);
+            setIsTrialUser(fetchedIsTrial);
+
+            if (normalizedRole) {
+              localStorage.setItem("role", normalizedRole);
+            }
+
+            if (fetchedIsTrial) {
+              localStorage.setItem("isTrial", "true");
+            } else {
+              localStorage.removeItem("isTrial");
+            }
             const fetchedName =
               typeof userData.name === "string" ? userData.name : "";
             setUserName(fetchedName);
@@ -392,8 +423,18 @@ export default function MyPage() {
     (sum, log) => sum + log.watchedSeconds,
     0
   );
+
+  const displayedCurriculum = curriculum;
+
+  const displayedTotalLessons = displayedCurriculum.reduce(
+    (sum, unit) => sum + unit.lessons.length,
+    0
+  );
+
   const progressPercent =
-    totalLessons > 0 ? Math.round((completedLessonCount / totalLessons) * 100) : 0;
+    displayedTotalLessons > 0
+      ? Math.round((completedLessonCount / displayedTotalLessons) * 100)
+      : 0;
 
   let lessonNumber = 0;
 
@@ -406,9 +447,23 @@ export default function MyPage() {
             {userName ? `${userName}さんのマイページ` : "マイページ"}
           </h1>
           <p className="text-slate-300 leading-7 max-w-3xl">
-            介護職員向け年間教育研修として、安全な介助動作、移乗・移動支援、認知症利用者対応、利用者尊厳、感染対策、事故予防、災害対応、情報共有、チームケア、利用者対応など全10領域・72講義を確認できます。各講義を視聴し、確認テストへ進んでください。
+            {isTrialUser
+              ? "お試し視聴アカウントのため、講義一覧は確認できますが、視聴できる講義は「身体拘束適正化に向けた介助実践」の1講義に制限されています。"
+              : "介護職員向け年間教育研修として、安全な介助動作、移乗・移動支援、認知症利用者対応、利用者尊厳、感染対策、事故予防、災害対応、情報共有、チームケア、利用者対応など全10領域・72講義を確認できます。各講義を視聴し、確認テストへ進んでください。"}
           </p>
         </div>
+
+        {isTrialUser && (
+          <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5 mb-8 shadow-sm">
+            <p className="text-sm font-semibold text-amber-800 mb-1">
+              お試し視聴中です
+            </p>
+            <p className="text-sm text-amber-800 leading-6">
+              このアカウントでは、契約前の確認用として「身体拘束適正化に向けた介助実践」のみ視聴できます。
+              講義一覧は確認できますが、その他の講義は本契約後に視聴できます。
+            </p>
+          </section>
+        )}
 
         {announcement && (
           <section className="rounded-2xl border border-blue-100 bg-blue-50 p-6 mb-8 shadow-sm">
@@ -444,11 +499,11 @@ export default function MyPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <div className="rounded-2xl bg-white border shadow-sm p-6">
             <p className="text-sm text-slate-500 mb-2">単元数</p>
-            <p className="text-3xl font-bold text-slate-900">{curriculum.length}</p>
+            <p className="text-3xl font-bold text-slate-900">{displayedCurriculum.length}</p>
           </div>
           <div className="rounded-2xl bg-white border shadow-sm p-6">
             <p className="text-sm text-slate-500 mb-2">講義数</p>
-            <p className="text-3xl font-bold text-slate-900">{totalLessons}</p>
+            <p className="text-3xl font-bold text-slate-900">{displayedTotalLessons}</p>
           </div>
           <div className="rounded-2xl bg-white border shadow-sm p-6">
             <p className="text-sm text-slate-500 mb-2">進捗率</p>
@@ -467,7 +522,7 @@ export default function MyPage() {
             <p className="text-sm text-slate-500 mb-2">視聴済み講義</p>
             <p className="text-3xl font-bold text-slate-900">
               {watchedLessonCount}
-              <span className="text-base text-slate-500"> / {totalLessons}</span>
+              <span className="text-base text-slate-500"> / {displayedTotalLessons}</span>
             </p>
           </div>
 
@@ -475,7 +530,7 @@ export default function MyPage() {
             <p className="text-sm text-slate-500 mb-2">完了講義</p>
             <p className="text-3xl font-bold text-slate-900">
               {completedLessonCount}
-              <span className="text-base text-slate-500"> / {totalLessons}</span>
+              <span className="text-base text-slate-500"> / {displayedTotalLessons}</span>
             </p>
           </div>
 
@@ -488,8 +543,15 @@ export default function MyPage() {
         </div>
 
         <div className="space-y-8">
-          {curriculum.map((unit) => (
-            <section key={unit.unit} className="rounded-2xl bg-white border shadow-sm overflow-hidden">
+          {displayedCurriculum.map((unit) => (
+            <section
+              key={unit.unit}
+              className={`rounded-2xl border shadow-sm overflow-hidden ${
+                isTrialUser && unit.chapter === "利用者尊厳を守る介護実践技術"
+                  ? "border-amber-300 bg-amber-50"
+                  : "bg-white"
+              }`}
+            >
               <button
                 type="button"
                 onClick={() =>
@@ -502,7 +564,18 @@ export default function MyPage() {
               >
                 <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
                   <div>
-                    <h2 className="text-2xl font-bold text-slate-900 mb-2">{unit.chapter}</h2>
+                    <div className="flex flex-wrap items-center gap-2 mb-2">
+                      <h2 className="text-2xl font-bold text-slate-900">
+                        {unit.chapter}
+                      </h2>
+
+                      {isTrialUser &&
+                        unit.chapter === "利用者尊厳を守る介護実践技術" && (
+                          <span className="inline-flex items-center rounded-full bg-amber-500 px-3 py-1 text-xs font-semibold text-white">
+                            お試し対象
+                          </span>
+                        )}
+                    </div>
                     <p className="text-slate-600 leading-7 max-w-4xl">{unit.goal}</p>
                   </div>
                   <span className="inline-flex items-center rounded-full bg-slate-100 text-slate-700 px-4 py-2 text-sm font-medium w-fit">
@@ -540,14 +613,29 @@ export default function MyPage() {
                           ? undefined
                           : lectureLogs[String(currentLessonNumber - 1)];
 
-                        const canOpenLesson =
-                          isFirstLessonInUnit || previousLessonLog?.completed === true;
+                        const isTrialLesson = lessonTitle === trialLessonTitle;
+
+                        const canOpenLesson = isTrialUser
+                          ? isTrialLesson
+                          : isFirstLessonInUnit || previousLessonLog?.completed === true;
 
                         return (
-                          <div key={`${unit.unit}-${lessonTitle}`} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                          <div
+                            key={`${unit.unit}-${lessonTitle}`}
+                            className={`rounded-xl border p-4 ${
+                              isTrialUser && isTrialLesson
+                                ? "border-amber-300 bg-amber-50 shadow-sm"
+                                : "border-slate-200 bg-slate-50"
+                            }`}
+                          >
                             <div className="flex items-start justify-between gap-3 mb-3">
                               <div>
                                 <p className="text-xs text-slate-500 mb-1">講義{currentLessonNumber}</p>
+                                {isTrialUser && isTrialLesson && (
+                                  <span className="mb-2 inline-flex items-center rounded-full bg-amber-500 px-3 py-1 text-xs font-semibold text-white">
+                                    お試し視聴できます
+                                  </span>
+                                )}
                                 <h3 className="font-semibold text-slate-900 leading-6">{lessonTitle}</h3>
                               </div>
                               <span
@@ -569,7 +657,7 @@ export default function MyPage() {
 
                             {canOpenLesson ? (
                               <Link
-                                href={`/lesson/${currentLessonNumber}`}
+                                href={`/lesson/${currentLessonNumber}?title=${encodeURIComponent(lessonTitle)}`}
                                 className="inline-flex items-center justify-center rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-800 transition"
                               >
                                 {status === "未視聴" ? "視聴する" : "続きから確認する"}
@@ -584,7 +672,9 @@ export default function MyPage() {
                                   受講ロック中
                                 </button>
                                 <p className="text-xs text-slate-500">
-                                  前の講義を完了すると受講できます。
+                                  {isTrialUser
+                                    ? "お試し視聴では、この講義は視聴できません。"
+                                    : "前の講義を完了すると受講できます。"}
                                 </p>
                               </div>
                             )}

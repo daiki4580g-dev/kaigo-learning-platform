@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import {
   collection,
@@ -91,7 +91,9 @@ const getYouTubeVideoId = (url?: string) => {
 export default function LessonDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
+  const requestedTitle = searchParams.get("title");
 
   const playerRef = useRef<YouTubePlayer | null>(null);
   const watchIntervalRef = useRef<number | null>(null);
@@ -139,6 +141,21 @@ export default function LessonDetailPage() {
 
       try {
         const lessonId = String(id);
+
+        if (requestedTitle) {
+          const titleQuery = query(
+            collection(db, "lessons"),
+            where("title", "==", requestedTitle),
+            limit(1)
+          );
+          const titleSnapshot = await getDocs(titleQuery);
+
+          if (!titleSnapshot.empty) {
+            setLesson(titleSnapshot.docs[0].data() as Lesson);
+            return;
+          }
+        }
+
         const docRef = doc(db, "lessons", lessonId);
         const docSnap = await getDoc(docRef);
 
@@ -186,7 +203,7 @@ export default function LessonDetailPage() {
     };
 
     fetchLesson();
-  }, [id]);
+  }, [id, requestedTitle]);
 
   useEffect(() => {
     if (!id || !lesson) return;
