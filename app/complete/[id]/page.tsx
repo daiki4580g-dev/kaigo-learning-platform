@@ -76,7 +76,7 @@ export default function CompletePage() {
             お疲れさまでした。修了証を発行できます。PDFとして保存する場合は、印刷画面で「PDFに保存」を選択してください。
           </p>
 
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+          <div className={`grid grid-cols-1 gap-4 ${isTrialUser ? "sm:grid-cols-3" : "sm:grid-cols-4"}`}>
             <button
               type="button"
               onClick={handlePrintCertificate}
@@ -85,17 +85,19 @@ export default function CompletePage() {
               修了証を発行する
             </button>
 
-            <button
-              type="button"
-              onClick={() => {
-                window.location.href = nextLessonNumber
-                  ? `/lesson/${nextLessonNumber}`
-                  : "/mypage";
-              }}
-              className="block w-full rounded-lg bg-blue-700 text-white px-6 py-4 text-base font-medium hover:bg-blue-800 transition shadow"
-            >
-              次の動画を視聴する
-            </button>
+            {!isTrialUser && (
+              <button
+                type="button"
+                onClick={() => {
+                  window.location.href = nextLessonNumber
+                    ? `/lesson/${nextLessonNumber}`
+                    : "/mypage";
+                }}
+                className="block w-full rounded-lg bg-blue-700 text-white px-6 py-4 text-base font-medium hover:bg-blue-800 transition shadow"
+              >
+                次の動画を視聴する
+              </button>
+            )}
 
             <button
               type="button"
