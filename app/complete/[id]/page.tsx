@@ -1,13 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 
 export default function CompletePage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
+  const requestedTitle = searchParams.get("title");
   const [userName, setUserName] = useState("受講者");
   const [facilityName, setFacilityName] = useState("所属施設");
+  const [isTrialUser, setIsTrialUser] = useState(false);
+  const [completedLessonTitle, setCompletedLessonTitle] = useState(
+    requestedTitle || `講義${id}`
+  );
   const completedDate = new Date().toLocaleDateString("ja-JP", {
     year: "numeric",
     month: "long",
@@ -24,15 +30,31 @@ export default function CompletePage() {
     const storedFacilityName =
       window.localStorage.getItem("facilityName") ||
       window.localStorage.getItem("facilityId");
+    const storedRole = window.localStorage.getItem("role") || "";
+    const storedIsTrial = window.localStorage.getItem("isTrial") === "true";
+    const trialAccount = storedRole.toLowerCase() === "trial" || storedIsTrial;
+    const storedLessonTitle = window.localStorage.getItem("currentLessonTitle");
 
     if (storedName) {
       setUserName(storedName);
     }
 
-    if (storedFacilityName) {
+    setIsTrialUser(trialAccount);
+
+    if (trialAccount) {
+      setFacilityName("trial");
+    }
+
+    if (requestedTitle) {
+      setCompletedLessonTitle(requestedTitle);
+    } else if (storedLessonTitle) {
+      setCompletedLessonTitle(storedLessonTitle);
+    }
+
+    if (storedFacilityName && !trialAccount) {
       setFacilityName(storedFacilityName);
     }
-  }, []);
+  }, [requestedTitle]);
 
   const handlePrintCertificate = () => {
     window.print();
@@ -43,7 +65,7 @@ export default function CompletePage() {
       <div className="max-w-4xl mx-auto space-y-8 print:max-w-none print:space-y-0">
         <section className="rounded-2xl border bg-white p-10 shadow-sm print:hidden">
           <h1 className="text-3xl font-bold text-green-700 text-center mb-6">
-            テスト完了
+            {isTrialUser ? "お試しテスト完了" : "テスト完了"}
           </h1>
 
           <p className="text-xl text-center mb-4">
@@ -104,17 +126,23 @@ export default function CompletePage() {
                 CERTIFICATE OF COMPLETION
               </p>
               <h2 className="text-4xl font-bold text-slate-900 mb-3">
-                修了証
+                {isTrialUser ? "お試し修了証" : "修了証"}
               </h2>
               <p className="text-slate-500">
                 介護職員向け年間教育研修
               </p>
+              {isTrialUser && (
+                <p className="mt-3 inline-flex rounded-full bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-800">
+                  Trial Certificate
+                </p>
+              )}
             </div>
 
             <div className="space-y-8 text-center">
               <p className="text-lg text-slate-700">
-                下記の者は、WorkWell Consulting が提供する研修において、
-                講義の受講および確認テストを修了したことを証します。
+                {isTrialUser
+                  ? "下記の者は、WorkWell Consulting が提供するお試し研修において、対象講義の受講および確認テストを完了したことを証します。"
+                  : "下記の者は、WorkWell Consulting が提供する研修において、講義の受講および確認テストを修了したことを証します。"}
               </p>
 
               <div className="py-6 border-y border-slate-300">
@@ -129,7 +157,7 @@ export default function CompletePage() {
                 </div>
                 <div>
                   <p className="text-sm text-slate-500 mb-1">修了講義</p>
-                  <p className="text-lg font-semibold text-slate-900">講義{id}</p>
+                  <p className="text-lg font-semibold text-slate-900">{completedLessonTitle}</p>
                 </div>
                 <div>
                   <p className="text-sm text-slate-500 mb-1">修了日</p>
@@ -145,7 +173,9 @@ export default function CompletePage() {
             <div className="mt-14 flex flex-col items-center gap-2">
               <p className="text-2xl font-bold text-slate-900">WorkWell Consulting</p>
               <p className="text-sm text-slate-500">
-                介護現場の安全と継続的な学習を支援します
+                {isTrialUser
+                  ? "この修了証はお試し視聴に基づく確認用です"
+                  : "介護現場の安全と継続的な学習を支援します"}
               </p>
             </div>
           </div>
