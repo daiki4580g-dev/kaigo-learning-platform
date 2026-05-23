@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { collection, doc, getDoc, getDocs, query, serverTimestamp, setDoc, where } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
@@ -105,7 +105,9 @@ const normalizeQuestions = (data: FirestoreTest): Question[] => {
 export default function TestDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
+  const requestedTitle = searchParams.get("title");
 
   const [test, setTest] = useState<{
     title: string;
@@ -156,34 +158,62 @@ useEffect(() => {
       }
 
       try {
-        const docRef = doc(db, "tests", id);
-        const docSnap = await getDoc(docRef);
-
         let data: FirestoreTest | null = null;
+        let resolvedTestDocId = String(id);
 
-        if (docSnap.exists()) {
-          data = docSnap.data() as FirestoreTest;
-        } else {
-          const numericId = Number(id);
-          const searchConditions = [
-            { field: "lectureId", value: String(id) },
-            { field: "lessonId", value: String(id) },
-            { field: "lectureId", value: Number.isNaN(numericId) ? String(id) : numericId },
-            { field: "lessonId", value: Number.isNaN(numericId) ? String(id) : numericId },
-            { field: "id", value: String(id) },
-            { field: "order", value: Number.isNaN(numericId) ? String(id) : numericId },
+        if (requestedTitle) {
+          const titleSearchConditions = [
+            { field: "title", value: requestedTitle },
+            { field: "testTitle", value: requestedTitle },
+            { field: "lessonTitle", value: requestedTitle },
+            { field: "lectureTitle", value: requestedTitle },
           ];
 
-          for (const condition of searchConditions) {
-            const testQuery = query(
+          for (const condition of titleSearchConditions) {
+            const titleQuery = query(
               collection(db, "tests"),
               where(condition.field, "==", condition.value)
             );
-            const testSnapshot = await getDocs(testQuery);
+            const titleSnapshot = await getDocs(titleQuery);
 
-            if (!testSnapshot.empty) {
-              data = testSnapshot.docs[0].data() as FirestoreTest;
+            if (!titleSnapshot.empty) {
+              data = titleSnapshot.docs[0].data() as FirestoreTest;
+              resolvedTestDocId = titleSnapshot.docs[0].id;
               break;
+            }
+          }
+        }
+
+        if (!data) {
+          const docRef = doc(db, "tests", id);
+          const docSnap = await getDoc(docRef);
+
+          if (docSnap.exists()) {
+            data = docSnap.data() as FirestoreTest;
+            resolvedTestDocId = docSnap.id;
+          } else {
+            const numericId = Number(id);
+            const searchConditions = [
+              { field: "lectureId", value: String(id) },
+              { field: "lessonId", value: String(id) },
+              { field: "lectureId", value: Number.isNaN(numericId) ? String(id) : numericId },
+              { field: "lessonId", value: Number.isNaN(numericId) ? String(id) : numericId },
+              { field: "id", value: String(id) },
+              { field: "order", value: Number.isNaN(numericId) ? String(id) : numericId },
+            ];
+
+            for (const condition of searchConditions) {
+              const testQuery = query(
+                collection(db, "tests"),
+                where(condition.field, "==", condition.value)
+              );
+              const testSnapshot = await getDocs(testQuery);
+
+              if (!testSnapshot.empty) {
+                data = testSnapshot.docs[0].data() as FirestoreTest;
+                resolvedTestDocId = testSnapshot.docs[0].id;
+                break;
+              }
             }
           }
         }
@@ -198,7 +228,7 @@ useEffect(() => {
 
         try {
           const questionsSnapshot = await getDocs(
-            collection(db, "tests", id, "questions")
+            collection(db, "tests", resolvedTestDocId, "questions")
           );
 
           subCollectionQuestions = questionsSnapshot.docs
@@ -239,6 +269,8 @@ useEffect(() => {
 
         console.log("取得テスト", {
           id,
+          requestedTitle,
+          resolvedTestDocId,
           data,
           normalizedQuestions,
           subCollectionQuestions,
@@ -266,7 +298,7 @@ useEffect(() => {
     };
 
     fetchTest();
-}, [id, checkingAuth, learnerId]);
+}, [id, requestedTitle, checkingAuth, learnerId]);
 
   if (checkingAuth) {
     return (

@@ -586,7 +586,10 @@ export default function LessonDetailPage() {
         { merge: true }
       );
 
-      window.location.href = `/test/${id}`;
+      const testTitleParam = lesson.title
+        ? `?title=${encodeURIComponent(lesson.title)}`
+        : "";
+      window.location.href = `/test/${id}${testTitleParam}`;
     } catch (error) {
       console.error("視聴終了ログ保存エラー", error);
       setErrorMessage("視聴ログの保存に失敗しました。もう一度お試しください。");
