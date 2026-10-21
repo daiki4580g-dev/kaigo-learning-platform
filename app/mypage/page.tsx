@@ -657,7 +657,7 @@ export default function MyPage() {
 
                             {canOpenLesson ? (
                               <Link
-                                href={`/lesson/${currentLessonNumber}?title=${encodeURIComponent(lessonTitle)}`}
+                                href={`/lesson/${isTrialUser && isTrialLesson ? "25" : currentLessonNumber}?title=${encodeURIComponent(lessonTitle)}`}
                                 className="inline-flex items-center justify-center rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-800 transition"
                               >
                                 {status === "未視聴" ? "視聴する" : "続きから確認する"}
