@@ -142,20 +142,7 @@ export default function LessonDetailPage() {
       try {
         const lessonId = String(id);
 
-        if (requestedTitle) {
-          const titleQuery = query(
-            collection(db, "lessons"),
-            where("title", "==", requestedTitle),
-            limit(1)
-          );
-          const titleSnapshot = await getDocs(titleQuery);
-
-          if (!titleSnapshot.empty) {
-            setLesson(titleSnapshot.docs[0].data() as Lesson);
-            return;
-          }
-        }
-
+        // 講義IDによる直接取得を最優先する
         const docRef = doc(db, "lessons", lessonId);
         const docSnap = await getDoc(docRef);
 
